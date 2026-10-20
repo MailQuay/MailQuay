@@ -372,12 +372,14 @@ docker compose -f docker-compose-dev.yml up -d --build
 - 后端: `.github/workflows/ci.yml`, `.github/workflows/release.yml`; 发布工作流按平台矩阵直接编译并上传产物.
 - 前端: `.github/workflows/ci.yml`, `.github/workflows/release.yml`.
 - 前端 `ci.yml` 在 PR 和 `main` 上执行检查并上传 `dist` artifact, 同时作为可复用工作流; 前端 `release.yml` 在标签上复用 `ci.yml`, 打包 `frontend-dist-<tag>.zip`, 生成校验文件并创建 Release.
-- 后端 `ci.yml` 的 full job 直接克隆前端仓库 `main` 的最新提交, 构建 `dist` 后编译内嵌二进制并校验 `full-prebuilt` 镜像目标, 不要求前端已有标签.
+- 后端 `ci.yml` 在 `main` 提交和同仓库 PR 上构建并推送 commit 级镜像: `ghcr.io/mailquay/mailquay:<7 位短提交>` 和 `:<7 位短提交>-core`; fork PR 只构建不推送, PR 使用 head commit 的短哈希.
+- 镜像构建使用 BuildKit 多架构和 GHA 缓存; Dockerfile 的 Go 编译阶段按 `TARGETOS`/`TARGETARCH` 交叉编译, 只在运行阶段使用目标架构基础镜像.
+- 后端 `ci.yml` 的 full job 直接克隆前端仓库 `main` 的最新提交, 构建 `dist` 后编译内嵌二进制并上传共享 artifact, 不要求前端已有标签.
 - 后端 `release.yml` 的 full 分支按同名前端标签克隆; `binaries` 矩阵每个平台同时编译 `mailquay-core` 和 `mailquay`; `images` 矩阵并行构建 `full-prebuilt` 和 `core` 镜像.
 - `binaries` 与 `images` 全部完成后, `publish` job 合并全部产物, 生成 `checksums.txt`, 创建或更新 Release.
 - 前端标签缺失时 full 分支在三次 clone 重试后失败, 后端不创建 Release; 先推前端标签, 再重新运行后端发布.
 - 镜像标签: 含前端版 `vX.Y.Z`, `latest` 和 7 位短提交哈希; 仅后端版在标签末尾追加 `-core`.
-- 所有工作流的 job 必须设置 `timeout-minutes`: 后端 CI 40/20/30, 发布前端 20, 二进制矩阵 30, 镜像矩阵 45, 发布上传 10, 前端 CI 20.
+- 所有工作流的 job 必须设置 `timeout-minutes`: 后端 CI 40/30/45, 发布前端 20, 二进制矩阵 30, 镜像矩阵 45, 发布上传 10, 前端 CI 20.
 - 联网步骤必须加命令级 `timeout` 和最多 3 次重试: 前端 clone 300 秒, `corepack pnpm install` 900 秒, `corepack pnpm build` 600 秒.
 - 平台矩阵使用 `fail-fast: false`, 单个平台失败不取消其他平台产物.
 - 前端依赖安装统一由 `corepack` 读取 `package.json` 的 `packageManager` 决定 pnpm 版本, 工作流不固定 pnpm 版本, 避免 `ERR_PNPM_BAD_PM_VERSION`.

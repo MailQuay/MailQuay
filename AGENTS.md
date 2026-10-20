@@ -196,6 +196,7 @@ pnpm generate:api
 - 后端必须提供 `mailquay` (含前端) 和 `mailquay-core` (仅 API) 两种构建; 含前端版在编译期嵌入前端, 不得用运行时开关伪装.
 - 后端发布在 `.github/workflows/release.yml` 内先按同名 tag 构建一次前端, 再并行编译 core 与 full; 全部成功后才创建 Release, 不维护单独的前端版本文件.
 - 后端 PR 和 `main` 的 CI 直接克隆前端仓库 `main` 最新提交验证内嵌构建, 不要求前端标签存在.
+- CI 在 `main` 提交和同仓库 PR 上推送 commit 级镜像 `<sha7>` 与 `<sha7>-core`; fork PR 只构建不推送; `latest` 只在标签发布时更新.
 - 后端二进制覆盖 linux/amd64, linux/arm64, darwin/amd64, darwin/arm64, windows/amd64, windows/arm64; Docker 只做 linux/amd64 和 linux/arm64.
 - 代码和产物文件名使用 `darwin`, 用户界面和发布说明写 `macOS`; 不手工创建 Release 绕过工作流.
 - 工作流的每个 job 必须设置 `timeout-minutes`; 联网步骤必须使用命令级 `timeout` 并最多重试 3 次; 平台构建矩阵使用 `fail-fast: false`.
