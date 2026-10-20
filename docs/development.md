@@ -308,11 +308,10 @@ docs(architecture): clarify SSE replay window
 
 ### 11.1 版本与发布顺序
 
-- 使用 SemVer, 标签格式 `vX.Y.Z`.
-- 前端先发布; 后端仓库根目录的 `frontend.version` 单行固定前端标签, 例如 `v1.2.3`, 不带分支或提交号.
-- 后端推送标签触发两条独立线路: `release-core` 和 `release-full`.
-- 前端只打标签, 不生成 GitHub Release; 标签工作流只做静态构建校验, 不构建镜像.
-- 后端 `release-full` 检查 `frontend.version` 对应的前端标签是否存在; 存在才构建含前端版, 不存在则该线路失败, 不影响 `release-core`.
+- 使用 SemVer, 标签格式 `vX.Y.Z`; 前端和后端使用完全相同的版本号, 不维护单独的前端版本文件.
+- 前端先打标签, 前端工作流执行检查, 构建并生成前端 Release; 后端随后打同名标签.
+- 后端 `release.yml` 在同一个工作流内先按同名 tag 构建一次前端, 再并行编译 core 和 full 两种形态.
+- 所有构建全部成功后, 同一个工作流的 `publish` job 才创建后端 Release; 任一条失败都不发布, 修复后重新运行整个工作流.
 
 ### 11.2 两种后端形态
 
@@ -347,8 +346,8 @@ docs(architecture): clarify SSE replay window
 
 ### 11.4 Docker 镜像与 Compose
 
-- 含前端镜像: `ghcr.io/mailquay/mailquay:vX.Y.Z`.
-- 不含前端镜像: `ghcr.io/mailquay/mailquay-core:vX.Y.Z`.
+- 含前端镜像: `ghcr.io/mailquay/mailquay:vX.Y.Z`, `ghcr.io/mailquay/mailquay:latest`, `ghcr.io/mailquay/mailquay:<短提交哈希>`.
+- 不含前端镜像: 同一镜像仓库, 标签追加 `-core`: `ghcr.io/mailquay/mailquay:vX.Y.Z-core`, `ghcr.io/mailquay/mailquay:latest-core`, `ghcr.io/mailquay/mailquay:<短提交哈希>-core`.
 - 两个镜像都支持 `linux/amd64` 和 `linux/arm64` 多架构 manifest.
 - 前端不提供容器镜像. 静态构建产物部署到 Cloudflare Pages 等静态平台, 或由含前端版后端内嵌.
 - `docker-compose.yml`: 使用 `ghcr.io/mailquay/mailquay` 发布镜像, 前后端同端口提供; 状态目录使用仓库内挂载 `./data` (uid 100) 和 `./pg_data` (uid 70, 权限 750).
@@ -370,22 +369,28 @@ docker compose -f docker-compose-dev.yml up -d --build
 
 ### 11.5 工作流
 
-- 后端: `.github/workflows/ci.yml`, `.github/workflows/release-core.yml`, `.github/workflows/release-full.yml`; 发布工作流按平台矩阵直接编译并上传产物.
-- 前端: `.github/workflows/ci.yml`, `.github/workflows/tag.yml`.
-- `release-core` 在后端标签上立即执行, 不检查、不等待前端.
-- `release-full` 用 `frontend.version` 检查前端仓库标签; 存在则检出该标签, 执行 `pnpm build`, 把 `dist` 放到 `internal/webassets/dist`, 再用 `-tags full` 编译; 镜像任务把检出目录作为 `frontend` 构建上下文, 在镜像构建阶段编译并内嵌前端; 缺失时快速失败, 不阻塞 core.
-- 前端标签工作流可以提 PR 更新后端 `frontend.version`; 如果没有自动更新, 维护者手动写入.
+- 后端: `.github/workflows/ci.yml`, `.github/workflows/release.yml`; 发布工作流按平台矩阵直接编译并上传产物.
+- 前端: `.github/workflows/ci.yml`, `.github/workflows/release.yml`.
+- 前端 `ci.yml` 在 PR 和 `main` 上执行检查并上传 `dist` artifact, 同时作为可复用工作流; 前端 `release.yml` 在标签上复用 `ci.yml`, 打包 `frontend-dist-<tag>.zip`, 生成校验文件并创建 Release.
+- 后端 `ci.yml` 的 full job 直接克隆前端仓库 `main` 的最新提交, 构建 `dist` 后编译内嵌二进制并校验 `full-prebuilt` 镜像目标, 不要求前端已有标签.
+- 后端 `release.yml` 的 full 分支按同名前端标签克隆; `binaries` 矩阵每个平台同时编译 `mailquay-core` 和 `mailquay`; `images` 矩阵并行构建 `full-prebuilt` 和 `core` 镜像.
+- `binaries` 与 `images` 全部完成后, `publish` job 合并全部产物, 生成 `checksums.txt`, 创建或更新 Release.
+- 前端标签缺失时 full 分支在三次 clone 重试后失败, 后端不创建 Release; 先推前端标签, 再重新运行后端发布.
+- 镜像标签: 含前端版 `vX.Y.Z`, `latest` 和 7 位短提交哈希; 仅后端版在标签末尾追加 `-core`.
+- 所有工作流的 job 必须设置 `timeout-minutes`: 后端 CI 40/20/30, 发布前端 20, 二进制矩阵 30, 镜像矩阵 45, 发布上传 10, 前端 CI 20.
+- 联网步骤必须加命令级 `timeout` 和最多 3 次重试: 前端 clone 300 秒, `corepack pnpm install` 900 秒, `corepack pnpm build` 600 秒.
+- 平台矩阵使用 `fail-fast: false`, 单个平台失败不取消其他平台产物.
+- 前端依赖安装统一由 `corepack` 读取 `package.json` 的 `packageManager` 决定 pnpm 版本, 工作流不固定 pnpm 版本, 避免 `ERR_PNPM_BAD_PM_VERSION`.
 - 标签工作流必须等测试和构建全部成功后再创建或更新 Release.
 - 发布工作流失败时修复并重新运行, 不手工创建 Release 绕过工作流.
 
 ### 11.6 发布说明
 
-1. 前端发布 `vX.Y.Z`.
-2. 更新后端 `frontend.version`.
-3. 推送后端 `vX.Y.Z` 标签.
-4. 等待 core 和 full 工作流; full 缺失前端时只重跑 full.
-5. 发布说明写入本地 `.release-notes.md`, 再同步到 GitHub Release.
-6. 保留 GitHub 自动生成的 `Full Changelog: <previous>...<current>` 链接.
+1. 前端打 `vX.Y.Z` 标签, 等前端 Release 和静态产物完成.
+2. 后端打同名 `vX.Y.Z` 标签; full 分支按该标签克隆前端仓库.
+3. 等待后端 core 和 full 两条分支; 两者都成功后 Release 自动创建.
+4. 发布说明写入本地 `.release-notes.md`, 再同步到 GitHub Release.
+5. 保留 GitHub 自动生成的 `Full Changelog: <previous>...<current>` 链接.
 
 ## 12. 故障排查
 

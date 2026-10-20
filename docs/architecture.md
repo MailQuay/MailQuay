@@ -661,7 +661,7 @@ flowchart LR
 - 差异在编译期: 含前端版用 Go `embed` 打包 `web/dist`, 静态资源命中文件时直接返回, 其余 GET/HEAD 路径回落到 `index.html`; 不含前端版不编译静态资源包, 也不注册静态文件路由.
 - 静态托管前端时, 需要把所有非静态资源路径重写到 `index.html`; 含前端版二进制已内置该回落.
 - 不是运行时开关, 不能通过只关闭端口或环境变量伪装成不含前端版.
-- `frontend.version` 固定含前端版使用的前端标签; `release-full` 检查该标签存在后才构建, `release-core` 不检查也不等待前端.
+- 前后端使用同一版本号; 后端 full 分支按后端标签克隆前端仓库并检出同名 tag, 两条分支都成功后才创建 Release.
 - 含前端版仍是同一套 API, 认证, SSE 和数据模型; 只是额外提供静态文件.
 - 含前端版和不含前端版都覆盖 Linux, macOS 和 Windows; Docker 镜像只覆盖 Linux amd64/arm64.
 

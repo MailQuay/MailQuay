@@ -192,8 +192,11 @@ pnpm generate:api
 - 使用 Conventional Commits: `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `build`, `ci`, `chore`.
 - 不提交 `.env`, 数据库文件, blob, 构建产物, 真实凭据或测试邮箱数据.
 - 不执行 `git reset --hard`, `git clean -fd` 或强推, 除非用户明确要求.
-- 发布只走 GitHub Actions; 前端只打标签不生成 Release, 后端标签生成 Release, 多平台二进制和 Docker 镜像.
+- 发布只走 GitHub Actions; 前端和后端使用同一版本号, 各自标签生成 Release, 多平台二进制和 Docker 镜像.
 - 后端必须提供 `mailquay` (含前端) 和 `mailquay-core` (仅 API) 两种构建; 含前端版在编译期嵌入前端, 不得用运行时开关伪装.
+- 后端发布在 `.github/workflows/release.yml` 内先按同名 tag 构建一次前端, 再并行编译 core 与 full; 全部成功后才创建 Release, 不维护单独的前端版本文件.
+- 后端 PR 和 `main` 的 CI 直接克隆前端仓库 `main` 最新提交验证内嵌构建, 不要求前端标签存在.
 - 后端二进制覆盖 linux/amd64, linux/arm64, darwin/amd64, darwin/arm64, windows/amd64, windows/arm64; Docker 只做 linux/amd64 和 linux/arm64.
-- `frontend.version` 固定 full 构建使用的前端标签; `release-core` 不检查不等待前端, `release-full` 检查失败时单独重跑.
 - 代码和产物文件名使用 `darwin`, 用户界面和发布说明写 `macOS`; 不手工创建 Release 绕过工作流.
+- 工作流的每个 job 必须设置 `timeout-minutes`; 联网步骤必须使用命令级 `timeout` 并最多重试 3 次; 平台构建矩阵使用 `fail-fast: false`.
+- Docker 镜像统一发布到 `ghcr.io/mailquay/mailquay`: 含前端版使用 `vX.Y.Z`, `latest` 和 7 位短提交哈希标签; 只含后端版在标签末尾追加 `-core`.

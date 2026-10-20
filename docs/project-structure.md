@@ -38,7 +38,6 @@ MailQuay/
 ├── Dockerfile                       # core/full 多阶段目标
 ├── docker-compose.yml               # 发布镜像 (ghcr.io), ./data 与 ./pg_data 挂载
 ├── docker-compose-dev.yml           # 本地构建 full 镜像, 单容器提供前后端
-├── frontend.version                 # 含前端版引用的前端标签
 ├── cmd/
 │   └── mailquay/
 │       └── main.go                  # serve, migrate, search, healthcheck 子命令
@@ -83,9 +82,8 @@ MailQuay/
 │   └── integration/                 # PostgreSQL, IMAP/POP3/SMTP 测试夹具
 └── .github/
     └── workflows/
-        ├── ci.yml                   # lint, test, image build
-        ├── release-core.yml         # 仅后端, 不等待前端
-        └── release-full.yml         # 含前端, 检查 frontend.version
+        ├── ci.yml                   # lint, test, core/full 构建
+        └── release.yml              # core 与 full 并行构建, 全部成功后发布
 ```
 
 ### 2.1 后端模块
@@ -211,7 +209,7 @@ frontend/
 └── .github/
     └── workflows/
         ├── ci.yml
-        └── tag.yml                  # 标签静态构建校验, 不发 Release
+        └── release.yml              # 标签构建并生成 Release
 ```
 
 ### 3.1 前端模块

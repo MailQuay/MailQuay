@@ -3,7 +3,7 @@
 ## 已确认
 
 - TLS 由外部反向代理或平台入口终止, 应用容器只跑 HTTP.
-- 发布走 GitHub Actions; 前端只打标签, 不生成 Release; 后端生成 Release 和 Docker 镜像.
+- 发布走 GitHub Actions; 前后端使用同一版本号并各自生成 Release; 后端并行构建 core 与 full, 两者都成功后才发布.
 - 后端二进制覆盖 Linux, macOS, Windows 的 amd64 和 arm64; Docker 只做 Linux amd64/arm64.
 
 ## 仍未回答
