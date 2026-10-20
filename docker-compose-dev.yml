@@ -1,0 +1,75 @@
+# Local development stack.
+#   postgres: official image, data bind-mounted to ../pg_data
+#   mailquay: Dockerfile target full - API, sync workers, SSE and the frontend
+#
+# One container serves both the API and the frontend. The frontend is compiled
+# during `docker compose build` from the sibling ../frontend checkout, which
+# Compose passes as the `frontend` build context; no Node process runs in the
+# container. Rebuild after frontend or backend source changes.
+#
+# Usage (from the MailQuay directory):
+#   docker compose -f docker-compose-dev.yml up -d --build
+#
+# Defaults are development-only. Override POSTGRES_PASSWORD,
+# MAILQUAY_SECRET_KEY and MAILQUAY_PUBLIC_URL before exposing this stack.
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mailquay
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mailquay-dev}
+      POSTGRES_DB: mailquay
+    volumes:
+      - ../pg_data:/var/lib/postgresql
+      # sudo docker run --rm postgres:18-alpine id postgres
+      # sudo mkdir -p ../pg_data
+      # sudo chown 70:70 ../pg_data && sudo chmod 750 ../pg_data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mailquay -d mailquay"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [mailquay-dev]
+
+  mailquay:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: full
+      additional_contexts:
+        frontend: ../frontend
+      args:
+        VERSION: ${MAILQUAY_VERSION:-dev}
+        COMMIT: ${MAILQUAY_COMMIT:-local}
+        BUILD_TIME: ${MAILQUAY_BUILD_TIME:-unknown}
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["/usr/local/bin/mailquay migrate up && exec /usr/local/bin/mailquay serve"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      MAILQUAY_LISTEN_ADDR: :8080
+      MAILQUAY_PUBLIC_URL: ${MAILQUAY_PUBLIC_URL:-http://localhost:${MAILQUAY_API_PORT:-8080}}
+      MAILQUAY_DATABASE_URL: postgres://mailquay:${POSTGRES_PASSWORD:-mailquay-dev}@postgres:5432/mailquay?sslmode=disable
+      MAILQUAY_DATA_DIR: /data
+      MAILQUAY_SECRET_KEY: ${MAILQUAY_SECRET_KEY:-ZGV2LW9ubHkta2V5LTAxMjM0NTY3ODlhYmNkZWZYWVo=}
+      MAILQUAY_TRUSTED_PROXIES: ${MAILQUAY_TRUSTED_PROXIES:-172.16.0.0/12}
+    ports:
+      - "${MAILQUAY_API_PORT:-8080}:8080"
+    volumes:
+      - ../data/dev:/data
+      # sudo mkdir -p ../data/dev
+      # sudo chown 100:100 ../data/dev
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/mailquay", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    networks: [mailquay-dev]
+
+networks:
+  mailquay-dev:

@@ -1,0 +1,1687 @@
+openapi: 3.0.3
+info:
+  title: MailQuay API
+  version: 1.0.0
+  description: |
+    MailQuay is a single-owner webmail client. All endpoints are namespaced under
+    `/api/v1` and require a session cookie except setup, login, health and OAuth
+    callbacks. Mutating requests must echo the CSRF cookie in `X-CSRF-Token`.
+servers:
+  - url: /api/v1
+tags:
+  - name: auth
+  - name: accounts
+  - name: identities
+  - name: mailboxes
+  - name: messages
+  - name: archive
+  - name: compose
+  - name: outbox
+  - name: search
+  - name: tasks
+  - name: settings
+  - name: events
+  - name: oauth
+paths:
+  /auth/me:
+    get:
+      operationId: getAuthStatus
+      tags: [auth]
+      security: []
+      responses:
+        '200':
+          description: Current authentication state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthStatus' }
+        '409':
+          $ref: '#/components/responses/SetupRequired'
+    patch:
+      operationId: updateProfile
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateProfileRequest' }
+      responses:
+        '200':
+          description: Updated profile.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/setup:
+    post:
+      operationId: setupOwner
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SetupRequest' }
+      responses:
+        '201':
+          description: Owner account created.
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Authenticated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      responses:
+        '204': { description: Session revoked. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/password:
+    post:
+      operationId: changePassword
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
+      responses:
+        '204': { description: Password changed, other sessions revoked. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /accounts:
+    get:
+      operationId: listAccounts
+      tags: [accounts]
+      responses:
+        '200':
+          description: Mail accounts.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accounts:
+                    type: array
+                    items: { $ref: '#/components/schemas/Account' }
+                required: [accounts]
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      operationId: createAccount
+      tags: [accounts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccountInput' }
+      responses:
+        '201':
+          description: Account created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Account' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /accounts/{id}:
+    parameters:
+      - $ref: '#/components/parameters/AccountID'
+    get:
+      operationId: getAccount
+      tags: [accounts]
+      responses:
+        '200':
+          description: Account detail.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Account' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      operationId: updateAccount
+      tags: [accounts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccountInput' }
+      responses:
+        '200':
+          description: Updated account.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Account' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deleteAccount
+      tags: [accounts]
+      responses:
+        '202': { description: Account soft deleted; cleanup queued. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /accounts/{id}/reconcile:
+    parameters:
+      - $ref: '#/components/parameters/AccountID'
+    post:
+      operationId: reconcileAccount
+      tags: [accounts]
+      responses:
+        '202': { description: Scope reconciliation queued. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /accounts/{id}/test:
+    parameters:
+      - $ref: '#/components/parameters/AccountID'
+    post:
+      operationId: testAccount
+      tags: [accounts]
+      responses:
+        '200':
+          description: Connection test result.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConnectionTestResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /accounts/{id}/sync:
+    parameters:
+      - $ref: '#/components/parameters/AccountID'
+    post:
+      operationId: syncAccount
+      tags: [accounts]
+      responses:
+        '202': { description: Sync requested. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /accounts/{id}/identities:
+    parameters:
+      - $ref: '#/components/parameters/AccountID'
+    get:
+      operationId: listIdentities
+      tags: [identities]
+      responses:
+        '200':
+          description: Sender identities.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  identities:
+                    type: array
+                    items: { $ref: '#/components/schemas/Identity' }
+                required: [identities]
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      operationId: createIdentity
+      tags: [identities]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IdentityInput' }
+      responses:
+        '201':
+          description: Identity created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Identity' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /accounts/{id}/identities/{email}:
+    parameters:
+      - $ref: '#/components/parameters/AccountID'
+      - $ref: '#/components/parameters/IdentityEmail'
+    patch:
+      operationId: updateIdentity
+      tags: [identities]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IdentityInput' }
+      responses:
+        '200':
+          description: Updated identity.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Identity' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deleteIdentity
+      tags: [identities]
+      responses:
+        '204': { description: Identity deleted. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /accounts/{id}/identities/{email}/default:
+    parameters:
+      - $ref: '#/components/parameters/AccountID'
+      - $ref: '#/components/parameters/IdentityEmail'
+    post:
+      operationId: setDefaultIdentity
+      tags: [identities]
+      responses:
+        '204': { description: Default identity updated. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /mailboxes:
+    get:
+      operationId: getMailboxTree
+      tags: [mailboxes]
+      responses:
+        '200':
+          description: Sidebar tree with counters.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MailboxTree' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /mailboxes/{id}:
+    parameters:
+      - $ref: '#/components/parameters/MailboxID'
+    get:
+      operationId: getMailbox
+      tags: [mailboxes]
+      responses:
+        '200':
+          description: Mailbox detail.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Mailbox' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /mailboxes/{id}/sync:
+    parameters:
+      - $ref: '#/components/parameters/MailboxID'
+    post:
+      operationId: syncMailbox
+      tags: [mailboxes]
+      responses:
+        '202': { description: Mailbox sync requested. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /messages:
+    get:
+      operationId: listMessages
+      tags: [messages]
+      parameters:
+        - name: view
+          in: query
+          schema:
+            type: string
+            enum: [mailbox, all, unread, marked, sent, trash]
+            default: mailbox
+        - name: accountId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: mailboxId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        '200':
+          description: Cursor page of messages.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessagePage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /messages/{id}:
+    parameters:
+      - $ref: '#/components/parameters/MessageID'
+    get:
+      operationId: getMessage
+      tags: [messages]
+      responses:
+        '200':
+          description: Message metadata.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      operationId: updateMessage
+      tags: [messages]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MessageUpdate' }
+      responses:
+        '200':
+          description: Updated message.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      operationId: deleteMessage
+      tags: [messages]
+      responses:
+        '202': { description: Message moved to Junk or queued for deletion. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /messages/{id}/body:
+    parameters:
+      - $ref: '#/components/parameters/MessageID'
+    get:
+      operationId: getMessageBody
+      tags: [messages]
+      responses:
+        '200':
+          description: Sanitized body and attachment metadata.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageBody' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /messages/{id}/raw:
+    parameters:
+      - $ref: '#/components/parameters/MessageID'
+    get:
+      operationId: getRawMessage
+      tags: [messages]
+      responses:
+        '200':
+          description: Raw MIME message.
+          content:
+            message/rfc822:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /messages/{id}/attachments/{attachmentId}:
+    parameters:
+      - $ref: '#/components/parameters/MessageID'
+      - $ref: '#/components/parameters/AttachmentID'
+    get:
+      operationId: downloadAttachment
+      tags: [messages]
+      responses:
+        '200':
+          description: Attachment bytes.
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /messages/{id}/move:
+    parameters:
+      - $ref: '#/components/parameters/MessageID'
+    post:
+      operationId: moveMessage
+      tags: [messages]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MoveMessageRequest' }
+      responses:
+        '204': { description: Message moved. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /messages/{id}/archive:
+    parameters:
+      - $ref: '#/components/parameters/MessageID'
+    post:
+      operationId: archiveMessage
+      tags: [messages]
+      responses:
+        '201':
+          description: Local archive copy.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ArchiveEntry' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /messages/batch:
+    post:
+      operationId: batchMessages
+      tags: [messages]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BatchRequest' }
+      responses:
+        '200':
+          description: Per-message results.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BatchResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /attachments:
+    post:
+      operationId: uploadAttachment
+      tags: [compose]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required: [file]
+      responses:
+        '201':
+          description: Uploaded attachment metadata.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UploadedAttachment' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413': { $ref: '#/components/responses/BadRequest' }
+  /messages/send:
+    post:
+      operationId: sendMessage
+      tags: [compose]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SendRequest' }
+      responses:
+        '202':
+          description: Outbox record accepted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OutboxItem' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /archive:
+    get:
+      operationId: listArchives
+      tags: [archive]
+      parameters:
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        '200':
+          description: Local archive entries.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ArchivePage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /archive/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getArchive
+      tags: [archive]
+      responses:
+        '200':
+          description: Archive entry.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ArchiveEntry' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /archive/{id}/body:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getArchiveBody
+      tags: [archive]
+      responses:
+        '200':
+          description: Sanitized archive body.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageBody' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /archive/{id}/raw:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getArchiveRaw
+      tags: [archive]
+      responses:
+        '200':
+          description: Raw MIME message.
+          content:
+            message/rfc822:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /archive/{id}/attachments/{attachmentId}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - $ref: '#/components/parameters/AttachmentID'
+    get:
+      operationId: downloadArchiveAttachment
+      tags: [archive]
+      responses:
+        '200':
+          description: Attachment bytes.
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /delete-queue:
+    get:
+      operationId: listDeleteQueue
+      tags: [messages]
+      responses:
+        '200':
+          description: Pending permanent deletions.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/DeleteQueueItem' }
+                required: [items]
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /threads/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getThread
+      tags: [messages]
+      responses:
+        '200':
+          description: Messages in the thread.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messages:
+                    type: array
+                    items: { $ref: '#/components/schemas/MessageSummary' }
+                required: [messages]
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /drafts:
+    get:
+      operationId: listDrafts
+      tags: [compose]
+      parameters:
+        - name: accountId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Drafts.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  drafts:
+                    type: array
+                    items: { $ref: '#/components/schemas/Draft' }
+                required: [drafts]
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      operationId: createDraft
+      tags: [compose]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DraftInput' }
+      responses:
+        '201':
+          description: Draft created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Draft' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /drafts/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getDraft
+      tags: [compose]
+      responses:
+        '200':
+          description: Draft detail.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Draft' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      operationId: updateDraft
+      tags: [compose]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DraftUpdateRequest' }
+      responses:
+        '200':
+          description: Updated draft.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Draft' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      operationId: deleteDraft
+      tags: [compose]
+      responses:
+        '204': { description: Draft deleted. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /drafts/{id}/sync:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: syncDraft
+      tags: [compose]
+      responses:
+        '202': { description: Draft sync requested. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /outbox:
+    get:
+      operationId: listOutbox
+      tags: [outbox]
+      responses:
+        '200':
+          description: Outbox records.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/OutboxItem' }
+                required: [items]
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /outbox/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      operationId: rescheduleOutbox
+      tags: [outbox]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RescheduleRequest' }
+      responses:
+        '200':
+          description: Rescheduled outbox record.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OutboxItem' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /outbox/{id}/retry:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: retryOutbox
+      tags: [outbox]
+      responses:
+        '202': { description: Retry queued. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /outbox/{id}/cancel:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: cancelOutbox
+      tags: [outbox]
+      responses:
+        '204': { description: Cancelled; draft preserved. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /search:
+    get:
+      operationId: searchMessages
+      tags: [search]
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: mode
+          in: query
+          schema:
+            type: string
+            enum: [subject, all]
+            default: all
+        - name: accountId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: mailboxId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: recipient
+          in: query
+          schema: { type: string }
+        - name: sender
+          in: query
+          schema: { type: string }
+        - name: hasAttachment
+          in: query
+          schema: { type: boolean }
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        '200':
+          description: Search results hydrated from PostgreSQL.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessagePage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /tasks:
+    get:
+      operationId: listTasks
+      tags: [tasks]
+      responses:
+        '200':
+          description: Background tasks.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tasks:
+                    type: array
+                    items: { $ref: '#/components/schemas/Task' }
+                required: [tasks]
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /tasks/{id}/retry:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: retryTask
+      tags: [tasks]
+      responses:
+        '202': { description: Retry requested. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /tasks/{id}/dismiss:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: dismissTask
+      tags: [tasks]
+      responses:
+        '204': { description: Failure hidden from the task ring. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [settings]
+      responses:
+        '200':
+          description: Global settings and effective concurrency.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Settings' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    patch:
+      operationId: updateSettings
+      tags: [settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SettingsUpdate' }
+      responses:
+        '200':
+          description: Updated settings.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Settings' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /settings/concurrency/detect:
+    post:
+      operationId: detectConcurrency
+      tags: [settings]
+      responses:
+        '200':
+          description: Fresh resource detection.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ResourceInfo' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /events:
+    get:
+      operationId: streamEvents
+      tags: [events]
+      parameters:
+        - name: Last-Event-ID
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Server-sent events.
+          content:
+            text/event-stream:
+              schema: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /oauth/{provider}/start:
+    parameters:
+      - $ref: '#/components/parameters/OAuthProvider'
+    get:
+      operationId: oauthStart
+      tags: [oauth]
+      parameters:
+        - name: accountId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '302':
+          description: Redirect to the provider.
+          headers:
+            Location:
+              schema: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /oauth/{provider}/callback:
+    parameters:
+      - $ref: '#/components/parameters/OAuthProvider'
+    get:
+      operationId: oauthCallback
+      tags: [oauth]
+      security: []
+      parameters:
+        - name: code
+          in: query
+          schema: { type: string }
+        - name: state
+          in: query
+          schema: { type: string }
+        - name: error
+          in: query
+          schema: { type: string }
+      responses:
+        '302':
+          description: Redirect back to settings.
+          headers:
+            Location:
+              schema: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+components:
+  securitySchemes:
+    session:
+      type: apiKey
+      in: cookie
+      name: mailquay_session
+  security:
+    - session: []
+  parameters:
+    AccountID:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    MailboxID:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    MessageID:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    AttachmentID:
+      name: attachmentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IdentityEmail:
+      name: email
+      in: path
+      required: true
+      schema: { type: string }
+    OAuthProvider:
+      name: provider
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [google, microsoft]
+  responses:
+    BadRequest:
+      description: Invalid request.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unauthorized:
+      description: Missing or expired session.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Forbidden:
+      description: CSRF or origin rejected.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Conflict:
+      description: Conflicting state.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    SetupRequired:
+      description: Owner account is not initialized.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    TooManyRequests:
+      description: Rate limited.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    ServiceUnavailable:
+      description: Dependent subsystem unavailable.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: object, additionalProperties: true }
+            requestId: { type: string }
+          required: [code, message]
+      required: [error]
+    SecurityInfo:
+      type: object
+      properties:
+        insecureTransport: { type: boolean }
+        scheme: { type: string }
+        host: { type: string }
+      required: [insecureTransport, scheme, host]
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        username: { type: string }
+        displayName: { type: string }
+        locale: { type: string }
+        theme: { type: string }
+      required: [id, username, displayName, locale, theme]
+    AuthStatus:
+      type: object
+      properties:
+        needsSetup: { type: boolean }
+        user: { $ref: '#/components/schemas/User' }
+        security: { $ref: '#/components/schemas/SecurityInfo' }
+        csrfToken: { type: string }
+      required: [needsSetup, security]
+    AuthResponse:
+      type: object
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        csrfToken: { type: string }
+        expiresAt: { type: string, format: date-time }
+      required: [user, csrfToken]
+    SetupRequest:
+      type: object
+      properties:
+        token: { type: string }
+        username: { type: string }
+        password: { type: string }
+      required: [token, username, password]
+    LoginRequest:
+      type: object
+      properties:
+        username: { type: string }
+        password: { type: string }
+      required: [username, password]
+    ChangePasswordRequest:
+      type: object
+      properties:
+        currentPassword: { type: string }
+        newPassword: { type: string }
+      required: [currentPassword, newPassword]
+    UpdateProfileRequest:
+      type: object
+      properties:
+        displayName: { type: string }
+        locale: { type: string }
+        theme: { type: string }
+      required: [displayName, locale, theme]
+    Address:
+      type: object
+      properties:
+        name: { type: string }
+        email: { type: string }
+      required: [email]
+    Account:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string }
+        color: { type: string }
+        provider: { type: string }
+        username: { type: string }
+        authType: { type: string, enum: [password, oauth2] }
+        hasPassword: { type: boolean }
+        hasOAuth: { type: boolean }
+        oauthProvider: { type: string }
+        receiveProtocol: { type: string, enum: [imap, pop3] }
+        imapAddr: { type: string }
+        imapSecurity: { type: string, enum: [implicit_tls, starttls, none] }
+        pop3Addr: { type: string }
+        pop3Security: { type: string, enum: [implicit_tls, starttls, none] }
+        smtpAddr: { type: string }
+        smtpSecurity: { type: string, enum: [implicit_tls, starttls, none] }
+        smtpHeloHostname: { type: string }
+        syncEnabled: { type: boolean }
+        initialSyncRange: { type: string, enum: [all, 1d, 3d, 1w, 1m, 1y] }
+        downloadScope: { type: string, enum: [headers, full_no_attachments, full_with_attachments] }
+        initialSyncCutoffAt: { type: string, format: date-time }
+        sentCopyMode: { type: string, enum: [auto, append, none] }
+        pop3LeaveOnServer: { type: boolean }
+        pop3DeleteOnServer: { type: boolean }
+        state: { type: string, enum: [connected, disconnected, syncing, error] }
+        lastError: { type: string }
+        createdAt: { type: string, format: date-time }
+        identities:
+          type: array
+          items: { $ref: '#/components/schemas/Identity' }
+      required: [id, name, email, color, provider, username, authType, receiveProtocol, syncEnabled, initialSyncRange, downloadScope, sentCopyMode, state, createdAt]
+    AccountInput:
+      type: object
+      properties:
+        name: { type: string }
+        email: { type: string, format: email }
+        color: { type: string }
+        provider: { type: string }
+        username: { type: string }
+        authType: { type: string, enum: [password, oauth2] }
+        password: { type: string }
+        oauthProvider: { type: string, enum: [google, microsoft] }
+        oauthRefreshToken: { type: string }
+        receiveProtocol: { type: string, enum: [imap, pop3] }
+        imapAddr: { type: string }
+        imapSecurity: { type: string, enum: [implicit_tls, starttls, none] }
+        pop3Addr: { type: string }
+        pop3Security: { type: string, enum: [implicit_tls, starttls, none] }
+        smtpAddr: { type: string }
+        smtpSecurity: { type: string, enum: [implicit_tls, starttls, none] }
+        smtpHeloHostname: { type: string }
+        syncEnabled: { type: boolean }
+        initialSyncRange: { type: string, enum: [all, 1d, 3d, 1w, 1m, 1y] }
+        downloadScope: { type: string, enum: [headers, full_no_attachments, full_with_attachments] }
+        sentCopyMode: { type: string, enum: [auto, append, none] }
+        pop3LeaveOnServer: { type: boolean }
+        pop3DeleteOnServer: { type: boolean }
+      required: [name, email, username, authType, receiveProtocol]
+    ConnectionTestResult:
+      type: object
+      properties:
+        receiveOk: { type: boolean }
+        smtpOk: { type: boolean }
+        errors:
+          type: array
+          items: { type: string }
+      required: [receiveOk, smtpOk, errors]
+    Identity:
+      type: object
+      properties:
+        accountId: { type: string, format: uuid }
+        email: { type: string }
+        name: { type: string }
+        organization: { type: string }
+        replyTo: { type: string }
+        bcc:
+          type: array
+          items: { type: string }
+        signatureHtml: { type: string }
+        signatureText: { type: string }
+        signatureMode: { type: string, enum: [all, new, reply, forward, none] }
+        isDefault: { type: boolean }
+      required: [accountId, email, name, signatureMode, isDefault]
+    IdentityInput:
+      type: object
+      properties:
+        email: { type: string }
+        name: { type: string }
+        organization: { type: string }
+        replyTo: { type: string }
+        bcc:
+          type: array
+          items: { type: string }
+        signatureHtml: { type: string }
+        signatureText: { type: string }
+        signatureMode: { type: string, enum: [all, new, reply, forward, none] }
+        isDefault: { type: boolean }
+      required: [email, name, signatureMode]
+    Mailbox:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        accountId: { type: string, format: uuid }
+        path: { type: string }
+        name: { type: string }
+        delimiter: { type: string }
+        role: { type: string, enum: [inbox, sent, drafts, trash, junk, archive, custom] }
+        attributes:
+          type: array
+          items: { type: string }
+        localOnly: { type: boolean }
+        syncMode: { type: string, enum: [full, pull, off] }
+        uidvalidity: { type: integer }
+        uidnext: { type: integer }
+        total: { type: integer }
+        unread: { type: integer }
+        syncState: { type: string, enum: [idle, syncing, error] }
+        lastSyncedAt: { type: string, format: date-time }
+        lastError: { type: string }
+      required: [id, accountId, path, name, role, localOnly, syncMode, total, unread, syncState]
+    AccountMailboxes:
+      type: object
+      properties:
+        account: { $ref: '#/components/schemas/Account' }
+        folders:
+          type: array
+          items: { $ref: '#/components/schemas/Mailbox' }
+        other:
+          type: array
+          items: { $ref: '#/components/schemas/Mailbox' }
+      required: [account, folders, other]
+    MailboxCounts:
+      type: object
+      properties:
+        all: { type: integer }
+        unread: { type: integer }
+        marked: { type: integer }
+        drafts: { type: integer }
+        sending: { type: integer }
+        sent: { type: integer }
+        trash: { type: integer }
+      required: [all, unread, marked, drafts, sending, sent, trash]
+    MailboxTree:
+      type: object
+      properties:
+        accounts:
+          type: array
+          items: { $ref: '#/components/schemas/AccountMailboxes' }
+        counts: { $ref: '#/components/schemas/MailboxCounts' }
+      required: [accounts, counts]
+    UploadedAttachment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        filename: { type: string }
+        contentType: { type: string }
+        size: { type: integer }
+      required: [id, filename, contentType, size]
+    Attachment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        filename: { type: string }
+        contentType: { type: string }
+        size: { type: integer }
+        disposition: { type: string }
+        contentId: { type: string }
+      required: [id, filename, contentType, size]
+    MessageSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        accountId: { type: string, format: uuid }
+        mailboxId: { type: string, format: uuid }
+        threadId: { type: string, format: uuid }
+        subject: { type: string }
+        from: { $ref: '#/components/schemas/Address' }
+        to:
+          type: array
+          items: { $ref: '#/components/schemas/Address' }
+        cc:
+          type: array
+          items: { $ref: '#/components/schemas/Address' }
+        sentAt: { type: string, format: date-time }
+        receivedAt: { type: string, format: date-time }
+        size: { type: integer }
+        unread: { type: boolean }
+        marked: { type: boolean }
+        hasAttachments: { type: boolean }
+        bodyState: { type: string }
+        attachmentsState: { type: string }
+        preserved: { type: boolean }
+        snippet: { type: string }
+        isArchive: { type: boolean }
+        accountEmail: { type: string }
+        accountName: { type: string }
+        accountColor: { type: string }
+        mailboxPath: { type: string }
+        mailboxRole: { type: string }
+      required: [id, accountId, mailboxId, subject, receivedAt, size, unread, marked, hasAttachments, bodyState]
+    MessageDetail:
+      allOf:
+        - $ref: '#/components/schemas/MessageSummary'
+        - type: object
+          properties:
+            messageIdHeader: { type: string }
+            inReplyTo: { type: string }
+            references:
+              type: array
+              items: { type: string }
+            flags:
+              type: array
+              items: { type: string }
+            keywords:
+              type: array
+              items: { type: string }
+            bcc:
+              type: array
+              items: { $ref: '#/components/schemas/Address' }
+            attachments:
+              type: array
+              items: { $ref: '#/components/schemas/Attachment' }
+    MessageBody:
+      type: object
+      properties:
+        html: { type: string }
+        text: { type: string }
+        remoteImagesBlocked: { type: boolean }
+        fetchedFromServer: { type: boolean }
+        attachments:
+          type: array
+          items: { $ref: '#/components/schemas/Attachment' }
+      required: [html, text, remoteImagesBlocked, attachments]
+    MessageUpdate:
+      type: object
+      properties:
+        unread: { type: boolean }
+        marked: { type: boolean }
+    MessagePage:
+      type: object
+      properties:
+        messages:
+          type: array
+          items: { $ref: '#/components/schemas/MessageSummary' }
+        nextCursor: { type: string }
+      required: [messages]
+    MoveMessageRequest:
+      type: object
+      properties:
+        mailboxId: { type: string, format: uuid }
+      required: [mailboxId]
+    BatchRequest:
+      type: object
+      properties:
+        ids:
+          type: array
+          items: { type: string, format: uuid }
+        action: { type: string, enum: [read, unread, mark, unmark, archive, delete, move] }
+        mailboxId: { type: string, format: uuid }
+      required: [ids, action]
+    BatchResult:
+      type: object
+      properties:
+        succeeded:
+          type: array
+          items: { type: string, format: uuid }
+        failed:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              error: { type: string }
+            required: [id, error]
+      required: [succeeded, failed]
+    ArchiveEntry:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        originAccountId: { type: string, format: uuid }
+        originAccountEmail: { type: string }
+        originMailboxPath: { type: string }
+        messageIdHeader: { type: string }
+        subject: { type: string }
+        from: { $ref: '#/components/schemas/Address' }
+        to:
+          type: array
+          items: { $ref: '#/components/schemas/Address' }
+        cc:
+          type: array
+          items: { $ref: '#/components/schemas/Address' }
+        bcc:
+          type: array
+          items: { $ref: '#/components/schemas/Address' }
+        sentAt: { type: string, format: date-time }
+        receivedAt: { type: string, format: date-time }
+        size: { type: integer }
+        hasAttachments: { type: boolean }
+        attachments:
+          type: array
+          items: { $ref: '#/components/schemas/Attachment' }
+        archivedAt: { type: string, format: date-time }
+      required: [id, originAccountEmail, subject, receivedAt, size, hasAttachments, archivedAt]
+    ArchivePage:
+      type: object
+      properties:
+        archives:
+          type: array
+          items: { $ref: '#/components/schemas/ArchiveEntry' }
+        nextCursor: { type: string }
+      required: [archives]
+    DeleteQueueItem:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        messageId: { type: string, format: uuid }
+        accountId: { type: string, format: uuid }
+        mailboxId: { type: string, format: uuid }
+        deleteAfter: { type: string, format: date-time }
+        status: { type: string }
+      required: [id, messageId, accountId, mailboxId, deleteAfter, status]
+    Draft:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        accountId: { type: string, format: uuid }
+        identityAccountId: { type: string, format: uuid }
+        identityEmail: { type: string }
+        inReplyTo: { type: string }
+        to:
+          type: array
+          items: { type: string }
+        cc:
+          type: array
+          items: { type: string }
+        bcc:
+          type: array
+          items: { type: string }
+        subject: { type: string }
+        bodyText: { type: string }
+        bodyHtml: { type: string }
+        attachments:
+          type: array
+          items: { $ref: '#/components/schemas/Attachment' }
+        revision: { type: integer }
+        contentHash: { type: string }
+        status: { type: string, enum: [editing, sending, failed, copy_failed, sent] }
+        syncState: { type: string }
+        scheduledAt: { type: string, format: date-time }
+        lastError: { type: string }
+        updatedAt: { type: string, format: date-time }
+      required: [id, accountId, identityAccountId, identityEmail, subject, bodyText, bodyHtml, revision, status, syncState, updatedAt]
+    DraftInput:
+      type: object
+      properties:
+        identityAccountId: { type: string, format: uuid }
+        identityEmail: { type: string }
+        inReplyTo: { type: string }
+        to:
+          type: array
+          items: { type: string }
+        cc:
+          type: array
+          items: { type: string }
+        bcc:
+          type: array
+          items: { type: string }
+        subject: { type: string }
+        bodyText: { type: string }
+        bodyHtml: { type: string }
+        attachmentIds:
+          type: array
+          items: { type: string, format: uuid }
+      required: [identityAccountId, identityEmail, subject, bodyText, bodyHtml]
+    DraftUpdateRequest:
+      allOf:
+        - $ref: '#/components/schemas/DraftInput'
+        - type: object
+          properties:
+            revision: { type: integer }
+          required: [revision]
+    SendRequest:
+      type: object
+      properties:
+        draftId: { type: string, format: uuid }
+        identityAccountId: { type: string, format: uuid }
+        identityEmail: { type: string }
+        scheduledAt: { type: string, format: date-time }
+      required: [draftId, identityAccountId, identityEmail]
+    OutboxItem:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        accountId: { type: string, format: uuid }
+        identityAccountId: { type: string, format: uuid }
+        identityEmail: { type: string }
+        draftId: { type: string, format: uuid }
+        messageIdHeader: { type: string }
+        status: { type: string, enum: [scheduled, pending, sending, sent, failed, copy_failed, cancelled] }
+        scheduledAt: { type: string, format: date-time }
+        attempts: { type: integer }
+        lastError: { type: string }
+        sentAt: { type: string, format: date-time }
+      required: [id, accountId, identityAccountId, identityEmail, draftId, status, attempts]
+    RescheduleRequest:
+      type: object
+      properties:
+        scheduledAt: { type: string, format: date-time }
+      required: [scheduledAt]
+    Task:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string }
+        accountId: { type: string, format: uuid }
+        status: { type: string, enum: [pending, running, completed, failed, cancelled] }
+        done: { type: integer }
+        total: { type: integer }
+        unit: { type: string }
+        message: { type: string }
+        error: { type: string }
+        startedAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time }
+      required: [id, type, status, done, total, unit, updatedAt]
+    ConcurrencySettings:
+      type: object
+      properties:
+        mode: { type: string, enum: [auto, manual] }
+        syncConcurrency: { type: integer }
+        fetchConcurrency: { type: integer }
+        searchConcurrency: { type: integer }
+        indexBatchSize: { type: integer }
+      required: [mode, syncConcurrency, fetchConcurrency, searchConcurrency, indexBatchSize]
+    ResourceInfo:
+      type: object
+      properties:
+        cgroupVersion: { type: integer }
+        cpus: { type: integer }
+        memoryBytes: { type: integer }
+        cpuSource: { type: string }
+        memorySource: { type: string }
+        auto: { $ref: '#/components/schemas/ConcurrencySettings' }
+        effective: { $ref: '#/components/schemas/ConcurrencySettings' }
+      required: [cgroupVersion, cpus, memoryBytes, cpuSource, memorySource, auto, effective]
+    Settings:
+      type: object
+      properties:
+        defaultInitialSyncRange: { type: string, enum: [all, 1d, 3d, 1w, 1m, 1y] }
+        defaultDownloadScope: { type: string, enum: [headers, full_no_attachments, full_with_attachments] }
+        preserveMarkedOnAccountDelete: { type: boolean }
+        sentSyncMode: { type: string, enum: [pull, off] }
+        draftSyncMode: { type: string, enum: [local, pull, mirror] }
+        draftPullIntervalSeconds: { type: integer }
+        draftPushDelaySeconds: { type: integer }
+        composeWindowMode: { type: string, enum: [in_app, new_window] }
+        sendRetryLimit: { type: integer }
+        deleteMode: { type: string, enum: [provider_auto, local_queue] }
+        deleteQueueDays: { type: integer }
+        signaturePosition: { type: string, enum: [above_quote, below_quote] }
+        timezone: { type: string }
+        language: { type: string, enum: [en, zh-CN] }
+        concurrency: { $ref: '#/components/schemas/ConcurrencySettings' }
+        resources: { $ref: '#/components/schemas/ResourceInfo' }
+        publicUrl: { type: string }
+        sessionTtlHours: { type: integer }
+        syncIntervalSeconds: { type: integer }
+        pop3IntervalSeconds: { type: integer }
+        bodyPrefetchMaxBytes: { type: integer }
+        maxAttachmentBytes: { type: integer }
+        corsOrigins:
+          type: array
+          items: { type: string }
+        trustedProxies:
+          type: array
+          items: { type: string }
+        insecureAllow:
+          type: array
+          items: { type: string }
+        googleClientId: { type: string }
+        microsoftClientId: { type: string }
+        googleSecretSet: { type: boolean }
+        microsoftSecretSet: { type: boolean }
+        logLevel: { type: string, enum: [debug, info, warn, error] }
+      required: [defaultInitialSyncRange, defaultDownloadScope, preserveMarkedOnAccountDelete, sentSyncMode, draftSyncMode, draftPullIntervalSeconds, draftPushDelaySeconds, composeWindowMode, sendRetryLimit, deleteMode, deleteQueueDays, signaturePosition, timezone, language, concurrency, resources, publicUrl, sessionTtlHours, syncIntervalSeconds, pop3IntervalSeconds, bodyPrefetchMaxBytes, maxAttachmentBytes, corsOrigins, trustedProxies, insecureAllow, googleClientId, microsoftClientId, googleSecretSet, microsoftSecretSet]
+    SettingsUpdate:
+      type: object
+      properties:
+        defaultInitialSyncRange: { type: string, enum: [all, 1d, 3d, 1w, 1m, 1y] }
+        defaultDownloadScope: { type: string, enum: [headers, full_no_attachments, full_with_attachments] }
+        preserveMarkedOnAccountDelete: { type: boolean }
+        sentSyncMode: { type: string, enum: [pull, off] }
+        draftSyncMode: { type: string, enum: [local, pull, mirror] }
+        draftPullIntervalSeconds: { type: integer }
+        draftPushDelaySeconds: { type: integer }
+        composeWindowMode: { type: string, enum: [in_app, new_window] }
+        sendRetryLimit: { type: integer, minimum: 0, maximum: 10 }
+        deleteMode: { type: string, enum: [provider_auto, local_queue] }
+        deleteQueueDays: { type: integer, minimum: 1, maximum: 365 }
+        signaturePosition: { type: string, enum: [above_quote, below_quote] }
+        timezone: { type: string }
+        language: { type: string, enum: [en, zh-CN] }
+        concurrencyMode: { type: string, enum: [auto, manual] }
+        syncConcurrency: { type: integer, minimum: 1, maximum: 32 }
+        fetchConcurrency: { type: integer, minimum: 1, maximum: 32 }
+        searchConcurrency: { type: integer, minimum: 1, maximum: 32 }
+        indexBatchSize: { type: integer, minimum: 50, maximum: 500 }
+        publicUrl: { type: string }
+        sessionTtlHours: { type: integer, minimum: 1, maximum: 8760 }
+        syncIntervalSeconds: { type: integer, minimum: 30, maximum: 86400 }
+        pop3IntervalSeconds: { type: integer, minimum: 30, maximum: 86400 }
+        bodyPrefetchMaxBytes: { type: integer, minimum: 0, maximum: 1073741824 }
+        maxAttachmentBytes: { type: integer, minimum: 1048576, maximum: 1073741824 }
+        corsOrigins:
+          type: array
+          items: { type: string }
+        trustedProxies:
+          type: array
+          items: { type: string }
+        insecureAllow:
+          type: array
+          items: { type: string }
+        googleClientId: { type: string }
+        microsoftClientId: { type: string }
+        googleClientSecret: { type: string }
+        microsoftClientSecret: { type: string }
+        logLevel: { type: string, enum: [debug, info, warn, error] }

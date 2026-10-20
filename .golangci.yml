@@ -1,0 +1,28 @@
+version: "2"
+run:
+  timeout: 5m
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - bodyclose
+    - contextcheck
+    - errorlint
+    - misspell
+    - unconvert
+    - unparam
+  exclusions:
+    rules:
+      - path: internal/httpapi/oapi/api.gen.go
+        linters:
+          - errcheck
+          - staticcheck
+          - unused
+      - path: internal/store/sqlcgen
+        linters:
+          - errcheck
+          - staticcheck
+          - unused

@@ -1,0 +1,8 @@
+package: oapi
+output: internal/httpapi/oapi/api.gen.go
+generate:
+  models: true
+  chi-server: true
+  embedded-spec: false
+output-options:
+  skip-prune: false

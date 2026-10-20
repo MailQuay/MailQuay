@@ -1,0 +1,56 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: mailquay
+          POSTGRES_PASSWORD: mailquay
+          POSTGRES_DB: mailquay_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U mailquay -d mailquay_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      MAILQUAY_TEST_DATABASE_URL: postgres://mailquay:mailquay@127.0.0.1:5432/mailquay_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.x"
+          cache: true
+      - name: go vet
+        run: go vet ./...
+      - name: unit tests
+        run: go test -race ./...
+      - name: integration tests
+        run: go test -tags=integration ./test/integration/...
+      - name: build api
+        run: make build
+      - name: generated code is current
+        run: |
+          go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0
+          go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.5.0
+          make generate
+          git diff --exit-code
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: build core image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: core
+          push: false
+          tags: mailquay-core:ci

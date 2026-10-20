@@ -1,0 +1,69 @@
+# Production stack using the published full backend image (API + embedded frontend).
+# The image is a placeholder until the first release workflow publishes it:
+#   ghcr.io/mailquay/mailquay
+#
+# Usage:
+#   POSTGRES_PASSWORD=... \
+#   MAILQUAY_SECRET_KEY=... \
+#   MAILQUAY_PUBLIC_URL=https://mail.example.com \
+#   docker compose -f docker-compose.yml up -d
+#
+# Required:
+#   POSTGRES_PASSWORD
+#   MAILQUAY_SECRET_KEY   (base64 of 32 random bytes)
+#   MAILQUAY_PUBLIC_URL
+#
+# State lives in host directories inside the checkout:
+#   ./pg_data   PostgreSQL data
+#   ./data      blob, body text cache, Bleve index and temp files
+# Create and chown them before the first start:
+#   sudo mkdir -p ./pg_data ./data
+#   sudo chown 70:70 ./pg_data && sudo chmod 750 ./pg_data
+#   sudo chown 100:100 ./data
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mailquay
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: mailquay
+    volumes:
+      - ./pg_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mailquay -d mailquay"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [mailquay]
+
+  mailquay:
+    image: ghcr.io/mailquay/mailquay:${MAILQUAY_VERSION:-latest}
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["/usr/local/bin/mailquay migrate up && exec /usr/local/bin/mailquay serve"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      MAILQUAY_LISTEN_ADDR: :8080
+      MAILQUAY_PUBLIC_URL: ${MAILQUAY_PUBLIC_URL:?set MAILQUAY_PUBLIC_URL}
+      MAILQUAY_DATABASE_URL: postgres://mailquay:${POSTGRES_PASSWORD}@postgres:5432/mailquay?sslmode=disable
+      MAILQUAY_DATA_DIR: /data
+      MAILQUAY_SECRET_KEY: ${MAILQUAY_SECRET_KEY:?set MAILQUAY_SECRET_KEY}
+      MAILQUAY_TRUSTED_PROXIES: ${MAILQUAY_TRUSTED_PROXIES:-172.16.0.0/12}
+    ports:
+      - "${MAILQUAY_WEB_PORT:-8080}:8080"
+    volumes:
+      - ./data:/data
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/mailquay", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    networks: [mailquay]
+
+networks:
+  mailquay:

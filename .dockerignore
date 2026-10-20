@@ -1,0 +1,8 @@
+.git
+bin
+data
+pg_data
+*.test
+*.out
+coverage*
+internal/webassets/dist
