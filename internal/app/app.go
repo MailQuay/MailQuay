@@ -25,6 +25,7 @@ import (
 	"github.com/mailquay/mailquay/internal/identity"
 	"github.com/mailquay/mailquay/internal/mailbox"
 	"github.com/mailquay/mailquay/internal/message"
+	"github.com/mailquay/mailquay/internal/netpace"
 	"github.com/mailquay/mailquay/internal/platform"
 	"github.com/mailquay/mailquay/internal/search"
 	"github.com/mailquay/mailquay/internal/settings"
@@ -33,6 +34,11 @@ import (
 	"github.com/mailquay/mailquay/internal/store/sqlcgen"
 	syncservice "github.com/mailquay/mailquay/internal/sync"
 )
+
+// dialInterval spaces connection attempts to the same mail host. Providers
+// throttle and risk-control clients by connection rate, so background work is
+// paced by the remote endpoint instead of local concurrency alone.
+const dialInterval = 2 * time.Second
 
 // App is the assembled server process.
 type App struct {
@@ -96,13 +102,14 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 		"index_batch", snap.Effective.IndexBatchSize)
 
 	hub := events.NewHub()
+	pacer := netpace.New(dialInterval)
 	accounts := account.NewService(st, cipher, logger)
 	accounts.SetSettings(settingsSvc)
 	ids := identity.NewService(st)
 	mailboxes := mailbox.NewService(st)
 	messages := message.NewService(st, hub, blobs, logger)
-	composeSvc := compose.NewService(st, accounts, ids, settingsSvc, messages, blobs, hub, logger)
-	syncSvc := syncservice.NewService(st, cfg, logger, hub, blobs, accounts, mailboxes, messages, settingsSvc)
+	composeSvc := compose.NewService(st, accounts, ids, settingsSvc, messages, blobs, hub, logger, pacer)
+	syncSvc := syncservice.NewService(st, cfg, logger, hub, blobs, accounts, mailboxes, messages, settingsSvc, pacer)
 
 	indexer := NewIndexer(st, index, blobs, hub, logger)
 	mappingKey := "search_mapping_version"

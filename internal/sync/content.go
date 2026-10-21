@@ -9,10 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/mailquay/mailquay/internal/imapclient"
 	"github.com/mailquay/mailquay/internal/message"
 	"github.com/mailquay/mailquay/internal/mime"
-	"github.com/mailquay/mailquay/internal/pop3client"
 	"github.com/mailquay/mailquay/internal/store/sqlcgen"
 )
 
@@ -190,7 +188,7 @@ func (s *Service) fetchRaw(ctx context.Context, acct sqlcgen.Account, msg sqlcge
 		if msg.Uid == nil {
 			return nil, errors.New("message has no IMAP uid")
 		}
-		client, err := imapclient.Dial(fetchCtx, s.imapConfig(acct, creds))
+		client, err := s.dialIMAP(fetchCtx, s.imapConfig(acct, creds))
 		if err != nil {
 			return nil, fmt.Errorf("connect imap: %w", err)
 		}
@@ -207,7 +205,7 @@ func (s *Service) fetchRaw(ctx context.Context, acct sqlcgen.Account, msg sqlcge
 	if msg.Pop3Uidl == nil {
 		return nil, errors.New("message has no POP3 UIDL")
 	}
-	client, err := pop3client.Dial(fetchCtx, s.pop3Config(acct, creds))
+	client, err := s.dialPOP3(fetchCtx, s.pop3Config(acct, creds))
 	if err != nil {
 		return nil, fmt.Errorf("connect pop3: %w", err)
 	}

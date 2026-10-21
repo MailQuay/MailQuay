@@ -66,7 +66,7 @@ func (s *Service) pushDraft(ctx context.Context, draft sqlcgen.Draft) error {
 			return err
 		}
 	}
-	client, err := imapclient.Dial(ctx, imapclient.Config{
+	client, err := s.dialIMAP(ctx, imapclient.Config{
 		Address: deref(acct.ImapAddr), Security: acct.ImapSecurity, Username: acct.Username,
 		Password: creds.Password, AccessToken: creds.AccessToken, Timeout: 30 * time.Second,
 	})

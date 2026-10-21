@@ -163,6 +163,59 @@ func (q *Queries) ListTasks(ctx context.Context) ([]Task, error) {
 	return items, nil
 }
 
+const restartFailedTask = `-- name: RestartFailedTask :one
+UPDATE tasks SET status = 'running', done = $1, total = $2,
+    message = $3, error = '', started_at = $4,
+    completed_at = NULL, updated_at = now()
+WHERE id = (
+    SELECT t.id FROM tasks t
+    WHERE t.type = $5
+      AND t.account_id IS NOT DISTINCT FROM $6
+      AND t.status = 'failed' AND t.dismissed_at IS NULL
+    ORDER BY t.updated_at DESC
+    LIMIT 1
+)
+RETURNING id, type, account_id, status, done, total, unit, message, error, started_at, updated_at, completed_at, dismissed_at, created_at
+`
+
+type RestartFailedTaskParams struct {
+	Done      int32      `json:"done"`
+	Total     int32      `json:"total"`
+	Message   string     `json:"message"`
+	StartedAt *time.Time `json:"started_at"`
+	Type      string     `json:"type"`
+	AccountID *uuid.UUID `json:"account_id"`
+}
+
+func (q *Queries) RestartFailedTask(ctx context.Context, arg RestartFailedTaskParams) (Task, error) {
+	row := q.db.QueryRow(ctx, restartFailedTask,
+		arg.Done,
+		arg.Total,
+		arg.Message,
+		arg.StartedAt,
+		arg.Type,
+		arg.AccountID,
+	)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.Type,
+		&i.AccountID,
+		&i.Status,
+		&i.Done,
+		&i.Total,
+		&i.Unit,
+		&i.Message,
+		&i.Error,
+		&i.StartedAt,
+		&i.UpdatedAt,
+		&i.CompletedAt,
+		&i.DismissedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const updateTaskProgress = `-- name: UpdateTaskProgress :exec
 UPDATE tasks SET done = $1, total = CASE WHEN $2::int > 0 THEN $2::int ELSE total END,
     message = $3, status = 'running', updated_at = now()

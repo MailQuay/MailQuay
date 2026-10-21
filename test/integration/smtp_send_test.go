@@ -139,7 +139,7 @@ func TestOutboxSendsSMTPAndMarksDraft(t *testing.T) {
 	ids := identity.NewService(st)
 	_ = mailbox.NewService(st)
 	messages := message.NewService(st, hub, blobs, logger)
-	composer := compose.NewService(st, accounts, ids, settingsSvc, messages, blobs, hub, logger)
+	composer := compose.NewService(st, accounts, ids, settingsSvc, messages, blobs, hub, logger, nil)
 
 	acct, err := accounts.Create(ctx, account.Input{
 		Name: "Alice", Email: "alice@example.com", Username: "alice", AuthType: "password",

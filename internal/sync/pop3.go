@@ -28,7 +28,13 @@ func (s *Service) pop3Config(acct sqlcgen.Account, creds account.Credentials) po
 	}
 }
 
-func (s *Service) syncPOP3(ctx context.Context, acct sqlcgen.Account, creds account.Credentials) error {
+func (s *Service) syncPOP3(ctx context.Context, acct sqlcgen.Account, creds account.Credentials) (err error) {
+	taskStarted := false
+	defer func() {
+		if err != nil && taskStarted {
+			s.failTaskForAccount(ctx, "mailbox_sync", acct.ID, err)
+		}
+	}()
 	inbox, err := s.mailboxes.EnsureMailbox(ctx, acct.ID, "inbox", "INBOX", "Inbox", false)
 	if err != nil {
 		return err
@@ -42,7 +48,7 @@ func (s *Service) syncPOP3(ctx context.Context, acct sqlcgen.Account, creds acco
 			return err
 		}
 	}
-	client, err := pop3client.Dial(ctx, s.pop3Config(acct, creds))
+	client, err := s.dialPOP3(ctx, s.pop3Config(acct, creds))
 	if err != nil {
 		return fmt.Errorf("connect pop3: %w", err)
 	}
@@ -67,6 +73,8 @@ func (s *Service) syncPOP3(ctx context.Context, acct sqlcgen.Account, creds acco
 	}
 	if err := s.startTask(ctx, "mailbox_sync", &acct.ID, 0, int32(len(infos)), "polling POP3"); err != nil {
 		s.logger.Debug("start pop3 task", "error", err)
+	} else {
+		taskStarted = true
 	}
 	seen := make(map[string]struct{}, len(infos))
 	processed := int32(0)

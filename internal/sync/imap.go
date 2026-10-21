@@ -29,7 +29,7 @@ func (s *Service) imapConfig(acct sqlcgen.Account, creds account.Credentials) im
 }
 
 func (s *Service) syncIMAP(ctx context.Context, acct sqlcgen.Account, creds account.Credentials) error {
-	client, err := imapclient.Dial(ctx, s.imapConfig(acct, creds))
+	client, err := s.dialIMAP(ctx, s.imapConfig(acct, creds))
 	if err != nil {
 		return fmt.Errorf("connect imap: %w", err)
 	}
@@ -75,7 +75,15 @@ func (s *Service) syncIMAP(ctx context.Context, acct sqlcgen.Account, creds acco
 	return nil
 }
 
-func (s *Service) syncIMAPMailbox(ctx context.Context, client *imapclient.Client, acct sqlcgen.Account, mb sqlcgen.Mailbox) error {
+func (s *Service) syncIMAPMailbox(ctx context.Context, client *imapclient.Client, acct sqlcgen.Account, mb sqlcgen.Mailbox) (err error) {
+	var taskType string
+	// A mailbox that fails after its task started must not leave the task
+	// running forever; the UI would show an endless sync.
+	defer func() {
+		if err != nil && taskType != "" {
+			s.failTaskForAccount(ctx, taskType, acct.ID, err)
+		}
+	}()
 	if err := s.store.UpdateMailboxState(ctx, sqlcgen.UpdateMailboxStateParams{
 		ID: mb.ID, Uidvalidity: mb.Uidvalidity, Uidnext: mb.Uidnext, Highestmodseq: mb.Highestmodseq,
 		SyncState: "syncing", LastSyncedAt: mb.LastSyncedAt, LastError: "",
@@ -100,7 +108,7 @@ func (s *Service) syncIMAPMailbox(ctx context.Context, client *imapclient.Client
 	if err != nil {
 		return err
 	}
-	taskType := "mailbox_sync"
+	taskType = "mailbox_sync"
 	if initial {
 		taskType = "initial_sync"
 	}

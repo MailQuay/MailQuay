@@ -296,7 +296,7 @@ func (s *Service) appendToSent(ctx context.Context, acct sqlcgen.Account, draft 
 	if err != nil {
 		return fmt.Errorf("sent mailbox not found: %w", err)
 	}
-	client, err := imapclient.Dial(ctx, imapclient.Config{
+	client, err := s.dialIMAP(ctx, imapclient.Config{
 		Address: deref(acct.ImapAddr), Security: acct.ImapSecurity, Username: acct.Username,
 		Password: creds.Password, AccessToken: creds.AccessToken, Timeout: 30 * time.Second,
 	})

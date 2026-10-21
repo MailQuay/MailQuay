@@ -12,6 +12,7 @@ import (
 
 	"github.com/mailquay/mailquay/internal/httpapi/oapi"
 	"github.com/mailquay/mailquay/internal/message"
+	"github.com/mailquay/mailquay/internal/netpace"
 	"github.com/mailquay/mailquay/internal/store/sqlcgen"
 )
 
@@ -89,7 +90,7 @@ func (s *Server) GetMessageBody(w http.ResponseWriter, r *http.Request, id oapi.
 		return
 	}
 	force := r.URL.Query().Get("refresh") == "true"
-	body, err := s.messages.Body(r.Context(), messageID, force)
+	body, err := s.messages.Body(netpace.WithInteractive(r.Context()), messageID, force)
 	if err != nil {
 		switch {
 		case errors.Is(err, message.ErrNotFound):
@@ -125,7 +126,7 @@ func (s *Server) GetRawMessage(w http.ResponseWriter, r *http.Request, id oapi.M
 		s.internal(w, r, err)
 		return
 	}
-	raw, err := s.sync.Raw(r.Context(), msg)
+	raw, err := s.sync.Raw(netpace.WithInteractive(r.Context()), msg)
 	if err != nil {
 		s.error(w, r, http.StatusNotFound, "not_found", "Raw message unavailable.")
 		return
@@ -163,7 +164,7 @@ func (s *Server) DownloadAttachment(w http.ResponseWriter, r *http.Request, id o
 		s.internal(w, r, err)
 		return
 	}
-	data, err := s.sync.AttachmentBytes(r.Context(), msg, att)
+	data, err := s.sync.AttachmentBytes(netpace.WithInteractive(r.Context()), msg, att)
 	if err != nil {
 		s.error(w, r, http.StatusNotFound, "not_found", "Attachment content unavailable.")
 		return

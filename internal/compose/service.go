@@ -18,7 +18,9 @@ import (
 	"github.com/mailquay/mailquay/internal/account"
 	"github.com/mailquay/mailquay/internal/events"
 	"github.com/mailquay/mailquay/internal/identity"
+	"github.com/mailquay/mailquay/internal/imapclient"
 	"github.com/mailquay/mailquay/internal/message"
+	"github.com/mailquay/mailquay/internal/netpace"
 	"github.com/mailquay/mailquay/internal/platform"
 	"github.com/mailquay/mailquay/internal/settings"
 	"github.com/mailquay/mailquay/internal/storage"
@@ -85,17 +87,27 @@ type Service struct {
 	blobs      *storage.Store
 	hub        *events.Hub
 	logger     *slog.Logger
+	pacer      *netpace.Pacer
 	trigger    chan uuid.UUID
 }
 
 // NewService builds the compose service.
 func NewService(st *store.Store, accounts *account.Service, identities *identity.Service,
 	settingsSvc *settings.Service, messages *message.Service, blobs *storage.Store,
-	hub *events.Hub, logger *slog.Logger) *Service {
+	hub *events.Hub, logger *slog.Logger, pacer *netpace.Pacer) *Service {
 	return &Service{
 		store: st, accounts: accounts, identities: identities, settings: settingsSvc,
-		messages: messages, blobs: blobs, hub: hub, logger: logger, trigger: make(chan uuid.UUID, 32),
+		messages: messages, blobs: blobs, hub: hub, logger: logger, pacer: pacer,
+		trigger: make(chan uuid.UUID, 32),
 	}
+}
+
+// dialIMAP paces connection attempts per remote host before dialing.
+func (s *Service) dialIMAP(ctx context.Context, cfg imapclient.Config) (*imapclient.Client, error) {
+	if err := s.pacer.Wait(ctx, cfg.Address); err != nil {
+		return nil, err
+	}
+	return imapclient.Dial(ctx, cfg)
 }
 
 // List returns drafts ordered by update time.

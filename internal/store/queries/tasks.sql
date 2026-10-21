@@ -10,6 +10,20 @@ ON CONFLICT (type, account_id) WHERE status IN ('pending', 'running') DO UPDATE 
     updated_at = now()
 RETURNING *;
 
+-- name: RestartFailedTask :one
+UPDATE tasks SET status = 'running', done = sqlc.arg(done), total = sqlc.arg(total),
+    message = sqlc.arg(message), error = '', started_at = sqlc.arg(started_at),
+    completed_at = NULL, updated_at = now()
+WHERE id = (
+    SELECT t.id FROM tasks t
+    WHERE t.type = sqlc.arg(type)
+      AND t.account_id IS NOT DISTINCT FROM sqlc.narg(account_id)
+      AND t.status = 'failed' AND t.dismissed_at IS NULL
+    ORDER BY t.updated_at DESC
+    LIMIT 1
+)
+RETURNING *;
+
 -- name: UpdateTaskProgress :exec
 UPDATE tasks SET done = sqlc.arg(done), total = CASE WHEN sqlc.arg(total)::int > 0 THEN sqlc.arg(total)::int ELSE total END,
     message = sqlc.arg(message), status = 'running', updated_at = now()

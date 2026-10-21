@@ -9,9 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/mailquay/mailquay/internal/imapclient"
 	"github.com/mailquay/mailquay/internal/platform"
-	"github.com/mailquay/mailquay/internal/pop3client"
 	"github.com/mailquay/mailquay/internal/store/sqlcgen"
 )
 
@@ -57,7 +55,7 @@ func (s *Service) processAccountOps(ctx context.Context, acct sqlcgen.Account) e
 	if err != nil {
 		return err
 	}
-	client, err := imapclient.Dial(ctx, s.imapConfig(acct, creds))
+	client, err := s.dialIMAP(ctx, s.imapConfig(acct, creds))
 	if err != nil {
 		return err
 	}
@@ -236,7 +234,7 @@ func (s *Service) idleLoop(ctx context.Context, accountID uuid.UUID) {
 			return
 		default:
 		}
-		client, err := imapclient.Dial(ctx, s.imapConfig(acct, creds))
+		client, err := s.dialIMAP(ctx, s.imapConfig(acct, creds))
 		if err != nil {
 			if !sleepCtx(ctx, backoff) {
 				return
@@ -298,7 +296,7 @@ func (s *Service) processPOP3AccountOps(ctx context.Context, acct sqlcgen.Accoun
 	if err != nil {
 		return err
 	}
-	client, err := pop3client.Dial(ctx, s.pop3Config(acct, creds))
+	client, err := s.dialPOP3(ctx, s.pop3Config(acct, creds))
 	if err != nil {
 		return err
 	}

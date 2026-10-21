@@ -13,9 +13,12 @@ import (
 	"github.com/mailquay/mailquay/internal/account"
 	"github.com/mailquay/mailquay/internal/config"
 	"github.com/mailquay/mailquay/internal/events"
+	"github.com/mailquay/mailquay/internal/imapclient"
 	"github.com/mailquay/mailquay/internal/mailbox"
 	"github.com/mailquay/mailquay/internal/message"
+	"github.com/mailquay/mailquay/internal/netpace"
 	"github.com/mailquay/mailquay/internal/platform"
+	"github.com/mailquay/mailquay/internal/pop3client"
 	"github.com/mailquay/mailquay/internal/settings"
 	"github.com/mailquay/mailquay/internal/storage"
 	"github.com/mailquay/mailquay/internal/store"
@@ -33,12 +36,14 @@ type Service struct {
 	mailboxes *mailbox.Service
 	messages  *message.Service
 	settings  *settings.Service
+	pacer     *netpace.Pacer
 
 	fetchLim *limiter
 	syncLim  *limiter
 
 	mu       sync.Mutex
 	lastRun  map[uuid.UUID]time.Time
+	failures map[uuid.UUID]int
 	workers  map[uuid.UUID]context.CancelFunc
 	idle     map[uuid.UUID]context.CancelFunc
 	taskIDs  map[string]uuid.UUID
@@ -57,7 +62,7 @@ type bodyRequest struct {
 // NewService wires the synchronization service.
 func NewService(st *store.Store, cfg *config.Config, logger *slog.Logger, hub *events.Hub,
 	blobs *storage.Store, accounts *account.Service, mailboxes *mailbox.Service,
-	messages *message.Service, settingsSvc *settings.Service) *Service {
+	messages *message.Service, settingsSvc *settings.Service, pacer *netpace.Pacer) *Service {
 	concurrency := settingsSvc.Resources()
 	syncN := 2
 	fetchN := 4
@@ -69,8 +74,10 @@ func NewService(st *store.Store, cfg *config.Config, logger *slog.Logger, hub *e
 	return &Service{
 		store: st, cfg: cfg, logger: logger, hub: hub, storage: blobs,
 		accounts: accounts, mailboxes: mailboxes, messages: messages, settings: settingsSvc,
+		pacer:    pacer,
 		fetchLim: newLimiter(fetchN), syncLim: newLimiter(syncN),
-		workers: make(map[uuid.UUID]context.CancelFunc), lastRun: make(map[uuid.UUID]time.Time), idle: make(map[uuid.UUID]context.CancelFunc),
+		workers: make(map[uuid.UUID]context.CancelFunc), lastRun: make(map[uuid.UUID]time.Time),
+		failures: make(map[uuid.UUID]int), idle: make(map[uuid.UUID]context.CancelFunc),
 		taskIDs: make(map[string]uuid.UUID), trigger: make(chan uuid.UUID, 64),
 		bodyCh: make(chan bodyRequest, 512),
 	}
@@ -172,7 +179,8 @@ func (s *Service) triggerDue(ctx context.Context, force bool) {
 		}
 		s.mu.Lock()
 		last, seen := s.lastRun[acct.ID]
-		due := force || !seen || now.Sub(last) >= interval
+		failures := s.failures[acct.ID]
+		due := force || !seen || now.Sub(last) >= backoffDelay(interval, failures)
 		if due {
 			s.lastRun[acct.ID] = now
 		}
@@ -214,8 +222,38 @@ func (s *Service) startAccountWorker(parent context.Context, accountID uuid.UUID
 		defer s.syncLim.release()
 		if err := s.syncAccount(ctx, accountID); err != nil {
 			s.logger.Warn("sync account", "account", accountID, "error", err)
+			s.recordSyncFailure(accountID)
+			return
 		}
+		s.recordSyncSuccess(accountID)
 	}()
+}
+
+// backoffDelay stretches the scheduled sync interval after consecutive
+// failures so an unreachable or throttled provider is not reconnected on every
+// tick. The multiplier is capped at 8x the configured interval.
+func backoffDelay(interval time.Duration, failures int) time.Duration {
+	if failures <= 0 {
+		return interval
+	}
+	if failures > 3 {
+		failures = 3
+	}
+	return interval * time.Duration(1<<failures)
+}
+
+func (s *Service) recordSyncFailure(accountID uuid.UUID) {
+	s.mu.Lock()
+	if s.failures[accountID] < 8 {
+		s.failures[accountID]++
+	}
+	s.mu.Unlock()
+}
+
+func (s *Service) recordSyncSuccess(accountID uuid.UUID) {
+	s.mu.Lock()
+	delete(s.failures, accountID)
+	s.mu.Unlock()
 }
 
 func (s *Service) syncAccount(ctx context.Context, accountID uuid.UUID) error {
@@ -251,6 +289,28 @@ func (s *Service) syncAccount(ctx context.Context, accountID uuid.UUID) error {
 	return nil
 }
 
+// dialIMAP reserves this host's next connection slot before dialing. Providers
+// throttle by connection rate, so every outbound dial in this service is paced
+// regardless of local concurrency.
+func (s *Service) dialIMAP(ctx context.Context, cfg imapclient.Config) (*imapclient.Client, error) {
+	if !netpace.IsInteractive(ctx) {
+		if err := s.pacer.Wait(ctx, cfg.Address); err != nil {
+			return nil, err
+		}
+	}
+	return imapclient.Dial(ctx, cfg)
+}
+
+// dialPOP3 is the POP3 counterpart of dialIMAP.
+func (s *Service) dialPOP3(ctx context.Context, cfg pop3client.Config) (*pop3client.Client, error) {
+	if !netpace.IsInteractive(ctx) {
+		if err := s.pacer.Wait(ctx, cfg.Address); err != nil {
+			return nil, err
+		}
+	}
+	return pop3client.Dial(ctx, cfg)
+}
+
 func (s *Service) setAccountError(ctx context.Context, accountID uuid.UUID, cause error) {
 	_ = s.store.SetAccountState(ctx, sqlcgen.SetAccountStateParams{ID: accountID, SyncState: "error", LastError: cause.Error()})
 	s.hub.Publish("account.updated", map[string]any{"accountId": accountID.String(), "state": "error", "error": cause.Error()})
@@ -265,10 +325,15 @@ func (s *Service) taskKey(typ string, accountID *uuid.UUID) string {
 
 func (s *Service) startTask(ctx context.Context, typ string, accountID *uuid.UUID, done, total int32, msg string) error {
 	now := time.Now().UTC()
-	task, err := s.store.UpsertTask(ctx, sqlcgen.UpsertTaskParams{
-		ID: uuid.MustParse(platform.NewID()), Type: typ, AccountID: accountID,
-		Status: "running", Done: done, Total: total, Unit: "messages", Message: msg, StartedAt: &now,
+	task, err := s.store.RestartFailedTask(ctx, sqlcgen.RestartFailedTaskParams{
+		Done: done, Total: total, Message: msg, StartedAt: &now, Type: typ, AccountID: accountID,
 	})
+	if err != nil {
+		task, err = s.store.UpsertTask(ctx, sqlcgen.UpsertTaskParams{
+			ID: uuid.MustParse(platform.NewID()), Type: typ, AccountID: accountID,
+			Status: "running", Done: done, Total: total, Unit: "messages", Message: msg, StartedAt: &now,
+		})
+	}
 	if err != nil {
 		return fmt.Errorf("upsert task: %w", err)
 	}

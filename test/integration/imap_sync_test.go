@@ -108,7 +108,7 @@ func TestIMAPInitialSyncAndBodyFetch(t *testing.T) {
 	ids := identity.NewService(st)
 	mailboxes := mailbox.NewService(st)
 	messages := message.NewService(st, hub, blobs, logger)
-	syncer := mailsync.NewService(st, cfg, logger, hub, blobs, accounts, mailboxes, messages, settingsSvc)
+	syncer := mailsync.NewService(st, cfg, logger, hub, blobs, accounts, mailboxes, messages, settingsSvc, nil)
 	messages.SetContent(syncer)
 
 	acct, err := accounts.Create(ctx, account.Input{
