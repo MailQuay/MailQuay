@@ -1004,6 +1004,7 @@ type SendRequest struct {
 
 // Settings defines model for Settings.
 type Settings struct {
+	AutoLocalConcurrency          bool                            `json:"autoLocalConcurrency"`
 	BimiAvatars                   bool                            `json:"bimiAvatars"`
 	BodyPrefetchMaxBytes          int                             `json:"bodyPrefetchMaxBytes"`
 	ComposeWindowMode             SettingsComposeWindowMode       `json:"composeWindowMode"`
@@ -1020,6 +1021,7 @@ type Settings struct {
 	GoogleFaviconAvatars          bool                            `json:"googleFaviconAvatars"`
 	GoogleSecretSet               bool                            `json:"googleSecretSet"`
 	GravatarAvatars               bool                            `json:"gravatarAvatars"`
+	IndexBatchSize                int                             `json:"indexBatchSize"`
 	Language                      SettingsLanguage                `json:"language"`
 	LogLevel                      *SettingsLogLevel               `json:"logLevel,omitempty"`
 	MaxAttachmentBytes            int                             `json:"maxAttachmentBytes"`
@@ -1029,6 +1031,7 @@ type Settings struct {
 	Pop3IntervalSeconds           int                             `json:"pop3IntervalSeconds"`
 	PreserveMarkedOnAccountDelete bool                            `json:"preserveMarkedOnAccountDelete"`
 	Resources                     ResourceInfo                    `json:"resources"`
+	SearchConcurrency             int                             `json:"searchConcurrency"`
 	SendRetryLimit                int                             `json:"sendRetryLimit"`
 	SentSyncMode                  SettingsSentSyncMode            `json:"sentSyncMode"`
 	SessionTtlHours               int                             `json:"sessionTtlHours"`
@@ -1066,6 +1069,7 @@ type SettingsSignaturePosition string
 
 // SettingsUpdate defines model for SettingsUpdate.
 type SettingsUpdate struct {
+	AutoLocalConcurrency          *bool                                  `json:"autoLocalConcurrency,omitempty"`
 	BimiAvatars                   *bool                                  `json:"bimiAvatars,omitempty"`
 	BodyPrefetchMaxBytes          *int                                   `json:"bodyPrefetchMaxBytes,omitempty"`
 	ComposeWindowMode             *SettingsUpdateComposeWindowMode       `json:"composeWindowMode,omitempty"`
@@ -1082,6 +1086,7 @@ type SettingsUpdate struct {
 	GoogleClientSecret            *string                                `json:"googleClientSecret,omitempty"`
 	GoogleFaviconAvatars          *bool                                  `json:"googleFaviconAvatars,omitempty"`
 	GravatarAvatars               *bool                                  `json:"gravatarAvatars,omitempty"`
+	IndexBatchSize                *int                                   `json:"indexBatchSize,omitempty"`
 	Language                      *SettingsUpdateLanguage                `json:"language,omitempty"`
 	LogLevel                      *SettingsUpdateLogLevel                `json:"logLevel,omitempty"`
 	MaxAttachmentBytes            *int                                   `json:"maxAttachmentBytes,omitempty"`
@@ -1090,6 +1095,7 @@ type SettingsUpdate struct {
 	NetworkAvatars                *bool                                  `json:"networkAvatars,omitempty"`
 	Pop3IntervalSeconds           *int                                   `json:"pop3IntervalSeconds,omitempty"`
 	PreserveMarkedOnAccountDelete *bool                                  `json:"preserveMarkedOnAccountDelete,omitempty"`
+	SearchConcurrency             *int                                   `json:"searchConcurrency,omitempty"`
 	SendRetryLimit                *int                                   `json:"sendRetryLimit,omitempty"`
 	SentSyncMode                  *SettingsUpdateSentSyncMode            `json:"sentSyncMode,omitempty"`
 	SessionTtlHours               *int                                   `json:"sessionTtlHours,omitempty"`

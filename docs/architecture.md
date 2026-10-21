@@ -377,16 +377,17 @@ sequenceDiagram
 | `sync_concurrency` | 同时同步的邮箱账号数 | 操作者设置, 默认 2 |
 | `fetch_concurrency` | 全局正文和附件拉取并发 | 操作者设置, 默认 2 |
 | `envelope_batch_size` | 单条 IMAP FETCH 的信封数量 | 操作者设置, 默认 50, 范围 1-200 |
-| `search_concurrency` | 同时执行的 Bleve 查询数 | 按 CPU 推荐: `clamp(ceil(cpu), 1, 8)` |
-| `index_batch_size` | 单批写入 Bleve 的文档数 | 按 CPU 推荐: `clamp(cpu*100, 50, 500)` |
+| `search_concurrency` | 同时执行的 Bleve 查询数 | 操作者设置, 默认 1, 范围 1-8; 自动调整时推荐 `clamp(ceil(cpu/2), 1, 4)` |
+| `index_batch_size` | 单批写入 Bleve 的文档数 | 操作者设置, 默认 50, 范围 10-500; 自动调整时推荐 `clamp(cpu*50, 50, 250)` |
 
 - 同步和拉取并发不按 CPU 或内存推导: 请求压力在远端服务商, 本机资源检测不能代表服务商限额. 默认保守, 在设置页"性能与并发"中修改, 保存后作用于新任务.
-- 搜索和索引按 cgroup v1/v2 的 CPU 限制推荐, 索引完全本地执行, 不访问网络.
+- 搜索和索引默认开启自动调整 (`auto_local_concurrency`), 按 cgroup v1/v2 的 CPU 限制保守推荐; 关闭后使用操作者填写的 `search_concurrency` 和 `index_batch_size`. 索引完全本地执行, 不访问网络.
+- 设置页"性能与并发"中自动调整开启时两个输入框只展示推荐值并禁用, 关闭后可编辑; 保存后作用于新的查询和索引批次, 正在运行的批次继续使用旧值.
 - CPU: 读取 cgroup v2 `cpu.max` 或 cgroup v1 `cpu.cfs_quota_us` / `cpu.cfs_period_us`, 同时参考 cpuset 和 `runtime.NumCPU()`, 取最小值.
 - 内存: 读取 cgroup v2 `memory.max` 或 cgroup v1 `memory.limit_in_bytes`; 无限制时回退到 `/proc/meminfo`, 仅用于展示.
 - Docker Compose 的 `deploy.resources.limits` 和 `mem_limit` / `cpus` 会体现在 cgroup 中, 不需要单独读取 Compose 文件.
 - 检测结果写入启动日志, 并在设置页显示"检测到 N CPU / M 内存"; 检测失败时回退到 `runtime.NumCPU()`.
-- Bleve 写入固定为单 writer, 不因为 CPU 多就并行写索引; 并行度只体现在查询和批大小.
+- Bleve 写入固定为单 writer, 不因为 CPU 多就并行写索引; 并行度只体现在查询并发和每批文档数.
 
 同一账号的连接模型:
 

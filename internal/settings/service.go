@@ -41,6 +41,9 @@ type Values struct {
 	Language                 string `json:"language"`
 	SyncConcurrency          int    `json:"syncConcurrency"`
 	FetchConcurrency         int    `json:"fetchConcurrency"`
+	SearchConcurrency        int    `json:"searchConcurrency"`
+	IndexBatchSize           int    `json:"indexBatchSize"`
+	AutoLocalConcurrency     bool   `json:"autoLocalConcurrency"`
 	EnvelopeBatchSize        int    `json:"envelopeBatchSize"`
 	SessionTTLHours          int    `json:"sessionTtlHours"`
 	SyncIntervalSeconds      int    `json:"syncIntervalSeconds"`
@@ -112,6 +115,9 @@ func Defaults() Values {
 		Language:                 "en",
 		SyncConcurrency:          2,
 		FetchConcurrency:         2,
+		SearchConcurrency:        1,
+		IndexBatchSize:           50,
+		AutoLocalConcurrency:     true,
 		EnvelopeBatchSize:        50,
 		SessionTTLHours:          168,
 		SyncIntervalSeconds:      300,
@@ -345,24 +351,29 @@ func (s *Service) storeSecret(ctx context.Context, key string, raw json.RawMessa
 // EffectiveConcurrency combines operator-set network pools with local pools.
 // Sync and fetch concurrency are deliberately not derived from CPU or memory:
 // their pressure lands on the mail provider, so the defaults stay conservative
-// and the operator decides. Search and index work is local, so those values
-// follow detected resources.
+// and the operator decides. Search and index work is local; it follows detected
+// resources only while the operator leaves automatic sizing enabled.
 func EffectiveConcurrency(v Values, res platform.Resources) Concurrency {
-	searchN, batch := LocalConcurrency(res)
+	searchN, batch := v.SearchConcurrency, v.IndexBatchSize
+	if v.AutoLocalConcurrency {
+		searchN, batch = LocalConcurrency(res)
+	}
 	return Concurrency{
 		SyncConcurrency: v.SyncConcurrency, FetchConcurrency: v.FetchConcurrency,
 		SearchConcurrency: searchN, IndexBatchSize: batch,
 	}
 }
 
-// LocalConcurrency recommends search and index pool sizes from detected
-// resources. Indexing never touches the network.
+// LocalConcurrency recommends conservative search and index pool sizes from
+// detected resources. Indexing never touches the network, but Bleve writes are
+// memory hungry, so the recommendation stays at half the visible CPUs and
+// never exceeds four queries or a 250 document batch.
 func LocalConcurrency(res platform.Resources) (searchN, batch int) {
 	cpu := float64(res.CPUs)
 	if cpu < 1 {
 		cpu = 1
 	}
-	return clamp(int(math.Ceil(cpu)), 1, 8), clamp(int(cpu*100), 50, 500)
+	return clamp(int(math.Ceil(cpu/2)), 1, 4), clamp(int(cpu*50), 50, 250)
 }
 
 func applyBootstrap(v *Values, b Bootstrap) {
@@ -454,6 +465,12 @@ func decodeInto(key string, raw json.RawMessage, v *Values) error {
 		return json.Unmarshal(raw, &v.SyncConcurrency)
 	case "fetch_concurrency":
 		return json.Unmarshal(raw, &v.FetchConcurrency)
+	case "search_concurrency":
+		return json.Unmarshal(raw, &v.SearchConcurrency)
+	case "index_batch_size":
+		return json.Unmarshal(raw, &v.IndexBatchSize)
+	case "auto_local_concurrency":
+		return json.Unmarshal(raw, &v.AutoLocalConcurrency)
 	case "envelope_batch_size":
 		return json.Unmarshal(raw, &v.EnvelopeBatchSize)
 	case "session_ttl_hours":
@@ -518,6 +535,12 @@ func setField(key string, raw json.RawMessage, v *Values) error {
 		return json.Unmarshal(raw, &v.SyncConcurrency)
 	case "fetch_concurrency":
 		return json.Unmarshal(raw, &v.FetchConcurrency)
+	case "search_concurrency":
+		return json.Unmarshal(raw, &v.SearchConcurrency)
+	case "index_batch_size":
+		return json.Unmarshal(raw, &v.IndexBatchSize)
+	case "auto_local_concurrency":
+		return json.Unmarshal(raw, &v.AutoLocalConcurrency)
 	case "envelope_batch_size":
 		return json.Unmarshal(raw, &v.EnvelopeBatchSize)
 	case "session_ttl_hours":
@@ -582,6 +605,12 @@ func fieldValue(key string, v Values) (any, error) {
 		return v.SyncConcurrency, nil
 	case "fetch_concurrency":
 		return v.FetchConcurrency, nil
+	case "search_concurrency":
+		return v.SearchConcurrency, nil
+	case "index_batch_size":
+		return v.IndexBatchSize, nil
+	case "auto_local_concurrency":
+		return v.AutoLocalConcurrency, nil
 	case "envelope_batch_size":
 		return v.EnvelopeBatchSize, nil
 	case "session_ttl_hours":
@@ -637,6 +666,12 @@ func validate(v Values) error {
 		if n < 1 || n > 32 {
 			return errors.New("concurrency values must be 1-32")
 		}
+	}
+	if v.SearchConcurrency < 1 || v.SearchConcurrency > 8 {
+		return errors.New("searchConcurrency must be 1-8")
+	}
+	if v.IndexBatchSize < 10 || v.IndexBatchSize > 500 {
+		return errors.New("indexBatchSize must be 10-500")
 	}
 	if v.EnvelopeBatchSize < 1 || v.EnvelopeBatchSize > 200 {
 		return errors.New("envelopeBatchSize must be 1-200")

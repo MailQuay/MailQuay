@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/blevesearch/bleve/v2"
@@ -117,6 +118,12 @@ type Index struct {
 	path   string
 	dirKey string
 	closed bool
+
+	// queryLimit bounds concurrent queries; queryActive tracks the current
+	// holders. The limit is replaced at runtime from settings.
+	queryLimit  atomic.Int64
+	queryMu     sync.Mutex
+	queryActive int
 }
 
 var (
@@ -206,6 +213,44 @@ func (i *Index) Close() error {
 	return nil
 }
 
+// SetQueryLimit bounds how many queries run at once. The change applies to new
+// acquisitions without restarting the process. Values below one mean one.
+func (i *Index) SetQueryLimit(limit int) {
+	if limit < 1 {
+		limit = 1
+	}
+	i.queryLimit.Store(int64(limit))
+}
+
+func (i *Index) acquireQuery(ctx context.Context) error {
+	for {
+		limit := int(i.queryLimit.Load())
+		if limit < 1 {
+			limit = 1
+		}
+		i.queryMu.Lock()
+		if i.queryActive < limit {
+			i.queryActive++
+			i.queryMu.Unlock()
+			return nil
+		}
+		i.queryMu.Unlock()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}
+
+func (i *Index) releaseQuery() {
+	i.queryMu.Lock()
+	if i.queryActive > 0 {
+		i.queryActive--
+	}
+	i.queryMu.Unlock()
+}
+
 // Upsert indexes docs, replacing any document with the same ID. It is
 // idempotent and safe to retry.
 func (i *Index) Upsert(ctx context.Context, docs []Document) error {
@@ -276,6 +321,10 @@ func (i *Index) Search(ctx context.Context, q Query) (Result, error) {
 	if err := ctx.Err(); err != nil {
 		return Result{}, err
 	}
+	if err := i.acquireQuery(ctx); err != nil {
+		return Result{}, err
+	}
+	defer i.releaseQuery()
 
 	qry, err := buildQuery(q)
 	if err != nil {

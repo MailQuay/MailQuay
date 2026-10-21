@@ -1800,6 +1800,9 @@ components:
         timezone: { type: string }
         language: { type: string, enum: [en, zh-CN] }
         envelopeBatchSize: { type: integer }
+        searchConcurrency: { type: integer }
+        indexBatchSize: { type: integer }
+        autoLocalConcurrency: { type: boolean }
         concurrency: { $ref: '#/components/schemas/ConcurrencySettings' }
         resources: { $ref: '#/components/schemas/ResourceInfo' }
         sessionTtlHours: { type: integer }
@@ -1812,7 +1815,7 @@ components:
         googleSecretSet: { type: boolean }
         microsoftSecretSet: { type: boolean }
         logLevel: { type: string, enum: [debug, info, warn, error] }
-      required: [defaultInitialSyncRange, defaultDownloadScope, preserveMarkedOnAccountDelete, sentSyncMode, draftSyncMode, draftPullIntervalSeconds, draftPushDelaySeconds, composeWindowMode, sendRetryLimit, deleteMode, deleteQueueDays, signaturePosition, networkAvatars, gravatarAvatars, bimiAvatars, googleFaviconAvatars, timezone, language, envelopeBatchSize, concurrency, resources, sessionTtlHours, syncIntervalSeconds, pop3IntervalSeconds, bodyPrefetchMaxBytes, maxAttachmentBytes, googleClientId, microsoftClientId, googleSecretSet, microsoftSecretSet]
+      required: [defaultInitialSyncRange, defaultDownloadScope, preserveMarkedOnAccountDelete, sentSyncMode, draftSyncMode, draftPullIntervalSeconds, draftPushDelaySeconds, composeWindowMode, sendRetryLimit, deleteMode, deleteQueueDays, signaturePosition, networkAvatars, gravatarAvatars, bimiAvatars, googleFaviconAvatars, timezone, language, envelopeBatchSize, searchConcurrency, indexBatchSize, autoLocalConcurrency, concurrency, resources, sessionTtlHours, syncIntervalSeconds, pop3IntervalSeconds, bodyPrefetchMaxBytes, maxAttachmentBytes, googleClientId, microsoftClientId, googleSecretSet, microsoftSecretSet]
     SettingsUpdate:
       type: object
       properties:
@@ -1837,6 +1840,9 @@ components:
         syncConcurrency: { type: integer, minimum: 1, maximum: 32 }
         fetchConcurrency: { type: integer, minimum: 1, maximum: 32 }
         envelopeBatchSize: { type: integer, minimum: 1, maximum: 200 }
+        searchConcurrency: { type: integer, minimum: 1, maximum: 8 }
+        indexBatchSize: { type: integer, minimum: 10, maximum: 500 }
+        autoLocalConcurrency: { type: boolean }
         sessionTtlHours: { type: integer, minimum: 1, maximum: 8760 }
         syncIntervalSeconds: { type: integer, minimum: 30, maximum: 86400 }
         pop3IntervalSeconds: { type: integer, minimum: 30, maximum: 86400 }

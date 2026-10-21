@@ -96,6 +96,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	})
 	settingsSvc.OnChange = func(values settings.Values) {
 		levelVar.Set(platform.ParseLevel(values.LogLevel))
+		index.SetQueryLimit(settings.EffectiveConcurrency(values, settingsSvc.Resources()).SearchConcurrency)
 	}
 	snap, err := settingsSvc.Get(ctx)
 	if err != nil {
@@ -103,6 +104,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 		st.Close()
 		return nil, err
 	}
+	index.SetQueryLimit(snap.Effective.SearchConcurrency)
 	logger.Info("concurrency", "sync", snap.Effective.SyncConcurrency, "fetch", snap.Effective.FetchConcurrency,
 		"search", snap.Effective.SearchConcurrency, "index_batch", snap.Effective.IndexBatchSize)
 
@@ -117,7 +119,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	composeSvc := compose.NewService(st, accounts, ids, settingsSvc, messages, blobs, hub, logger, pacer, sessions)
 	syncSvc := syncservice.NewService(st, cfg, logger, hub, blobs, accounts, mailboxes, messages, settingsSvc, pacer, sessions)
 
-	indexer := NewIndexer(st, index, blobs, hub, logger)
+	indexer := NewIndexer(st, index, blobs, hub, settingsSvc, logger)
 	mappingKey := "search_mapping_version"
 	if row, err := st.GetSetting(ctx, mappingKey); err == nil {
 		var stored uint

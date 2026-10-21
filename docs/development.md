@@ -430,9 +430,9 @@ docker compose -f docker-compose-dev.yml up -d --build
 | 任务一直停在运行中 | 打开任务面板看 `error`; 单个文件夹失败会把任务标记为 `failed`, 下次同步复用同一条记录 |
 | 服务商限速或风控 | 建连已按远端主机每 2 秒一次排队, 连续失败按 2 倍退避; 检查是否多实例或外部客户端同时连接同一账号 |
 | 任务面板不展开 | 检查 Popover 定位容器是否被 `overflow` 裁剪, 键盘焦点是否进入环, 以及 `Esc` 状态 |
-| 索引并发不符合容器限制 | 检查 cgroup v1/v2 路径, Compose `deploy.resources.limits` 是否生效, 以及进程是否在宿主 cgroup 而不是容器内; 同步和拉取并发不再自动推导 |
-| 同步或索引占满内存 | 降低 `fetch_concurrency` / `index_batch_size`, 或提高容器内存限制 |
-| 修改并发后不生效 | 确认保存成功; 正在运行的任务继续使用旧值, 新任务才使用新值 |
+| 索引并发不符合容器限制 | 检查自动调整是否开启, cgroup v1/v2 路径, Compose `deploy.resources.limits` 是否生效, 以及进程是否在宿主 cgroup 而不是容器内; 同步和拉取并发不自动推导 |
+| 同步或索引占满内存 | 降低 `fetch_concurrency` / `index_batch_size`, 或关闭自动调整后手动调低, 或提高容器内存限制 |
+| 修改并发后不生效 | 确认自动调整已关闭或该值不是自动推导项, 保存成功; 正在运行的任务继续使用旧值, 新任务才使用新值 |
 | 搜索返回 `search_unavailable` | Bleve 索引锁是否被另一个进程持有, 索引目录权限是否可写, 进程是否优雅关闭 |
 | 搜索索引落后或缺少新邮件 | 检查 `search_jobs` 积压和失败记录, 必要时执行 `mailquay search reindex --all` |
 | 中文搜索命中少 | 确认字段使用 `cjk` 分析器, 正文已拉取并入库, 查询没有错误使用 keyword 字段 |

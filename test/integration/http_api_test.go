@@ -111,6 +111,23 @@ func TestHTTPAuthAndAccountFlow(t *testing.T) {
 	if _, ok := concurrency["searchConcurrency"]; !ok {
 		t.Fatalf("local concurrency missing: %+v", concurrency)
 	}
+	resp = sendJSON(t, client, http.MethodPatch, base+"/settings", map[string]any{
+		"searchConcurrency": 2, "indexBatchSize": 120, "autoLocalConcurrency": false,
+	}, csrf)
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("local concurrency patch %d: %s", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+	settings = getJSON(t, client, base+"/settings")
+	if settings["autoLocalConcurrency"] != false || settings["searchConcurrency"] != float64(2) ||
+		settings["indexBatchSize"] != float64(120) {
+		t.Fatalf("local concurrency settings not persisted: %+v", settings)
+	}
+	concurrency, _ = settings["concurrency"].(map[string]any)
+	if concurrency["searchConcurrency"] != float64(2) || concurrency["indexBatchSize"] != float64(120) {
+		t.Fatalf("manual local pools not applied: %+v", concurrency)
+	}
 	oauth, _ := settings["oauth"].(map[string]any)
 	_ = oauth
 	loginResp := sendJSON(t, client, http.MethodPost, base+"/auth/login", map[string]any{

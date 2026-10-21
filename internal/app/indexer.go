@@ -15,6 +15,7 @@ import (
 	"github.com/mailquay/mailquay/internal/mime"
 	"github.com/mailquay/mailquay/internal/platform"
 	"github.com/mailquay/mailquay/internal/search"
+	"github.com/mailquay/mailquay/internal/settings"
 	"github.com/mailquay/mailquay/internal/storage"
 	"github.com/mailquay/mailquay/internal/store"
 	"github.com/mailquay/mailquay/internal/store/sqlcgen"
@@ -22,20 +23,21 @@ import (
 
 // Indexer drains search_jobs into the Bleve index.
 type Indexer struct {
-	store  *store.Store
-	index  *search.Index
-	blobs  *storage.Store
-	hub    *events.Hub
-	log    *slog.Logger
-	mu     sync.Mutex
-	taskID uuid.UUID
-	total  int32
-	done   int32
+	store    *store.Store
+	index    *search.Index
+	blobs    *storage.Store
+	hub      *events.Hub
+	settings *settings.Service
+	log      *slog.Logger
+	mu       sync.Mutex
+	taskID   uuid.UUID
+	total    int32
+	done     int32
 }
 
 // NewIndexer builds the index worker.
-func NewIndexer(st *store.Store, index *search.Index, blobs *storage.Store, hub *events.Hub, logger *slog.Logger) *Indexer {
-	return &Indexer{store: st, index: index, blobs: blobs, hub: hub, log: logger}
+func NewIndexer(st *store.Store, index *search.Index, blobs *storage.Store, hub *events.Hub, settingsSvc *settings.Service, logger *slog.Logger) *Indexer {
+	return &Indexer{store: st, index: index, blobs: blobs, hub: hub, settings: settingsSvc, log: logger}
 }
 
 // Run processes index jobs until the context is cancelled.
@@ -66,7 +68,11 @@ func (i *Indexer) processBatch(ctx context.Context) (int, error) {
 		i.log.Debug("reset search jobs", "error", err)
 	}
 	lease := time.Now().UTC().Add(2 * time.Minute)
-	jobs, err := i.store.ClaimSearchJobs(ctx, sqlcgen.ClaimSearchJobsParams{LeaseUntil: &lease, Limit: 100})
+	batch := 50
+	if snap := i.settings.CurrentSnapshot(); snap.Effective.IndexBatchSize > 0 {
+		batch = snap.Effective.IndexBatchSize
+	}
+	jobs, err := i.store.ClaimSearchJobs(ctx, sqlcgen.ClaimSearchJobsParams{LeaseUntil: &lease, Limit: int32(batch)})
 	if err != nil {
 		return 0, err
 	}
