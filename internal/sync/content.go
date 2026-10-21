@@ -9,8 +9,10 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/mailquay/mailquay/internal/imapclient"
 	"github.com/mailquay/mailquay/internal/message"
 	"github.com/mailquay/mailquay/internal/mime"
+	"github.com/mailquay/mailquay/internal/netpace"
 	"github.com/mailquay/mailquay/internal/store/sqlcgen"
 )
 
@@ -173,6 +175,10 @@ func (s *Service) cacheRaw(ctx context.Context, acct sqlcgen.Account, msg sqlcge
 	return nil
 }
 
+// bodyFetchInterval spaces background raw fetches on a reused connection.
+// Interactive reads skip it so opening a message stays immediate.
+const bodyFetchInterval = 200 * time.Millisecond
+
 func (s *Service) fetchRaw(ctx context.Context, acct sqlcgen.Account, msg sqlcgen.Message) ([]byte, error) {
 	creds, err := s.accounts.Credentials(ctx, acct)
 	if err != nil {
@@ -188,17 +194,23 @@ func (s *Service) fetchRaw(ctx context.Context, acct sqlcgen.Account, msg sqlcge
 		if msg.Uid == nil {
 			return nil, errors.New("message has no IMAP uid")
 		}
-		client, err := s.dialIMAP(fetchCtx, s.imapConfig(acct, creds))
+		var raw []byte
+		err := s.sessions.Do(fetchCtx, acct.ID, netpace.IsInteractive(ctx), s.imapDialer(acct, creds), func(ctx context.Context, client *imapclient.Client) error {
+			if !netpace.IsInteractive(ctx) && !sleepCtx(ctx, bodyFetchInterval) {
+				return ctx.Err()
+			}
+			if _, err := client.Select(ctx, mb.Path); err != nil {
+				return fmt.Errorf("select mailbox: %w", err)
+			}
+			data, err := client.FetchRaw(ctx, uint32(*msg.Uid))
+			if err != nil {
+				return fmt.Errorf("fetch raw: %w", err)
+			}
+			raw = data
+			return nil
+		})
 		if err != nil {
-			return nil, fmt.Errorf("connect imap: %w", err)
-		}
-		defer client.Close()
-		if _, err := client.Select(fetchCtx, mb.Path); err != nil {
-			return nil, fmt.Errorf("select mailbox: %w", err)
-		}
-		raw, err := client.FetchRaw(fetchCtx, uint32(*msg.Uid))
-		if err != nil {
-			return nil, fmt.Errorf("fetch raw: %w", err)
+			return nil, err
 		}
 		return raw, nil
 	}

@@ -179,8 +179,8 @@ stateDiagram-v2
 
 1. `LIST` 获取文件夹, 按名称和特殊用途标志映射角色: `inbox`, `sent`, `drafts`, `trash`, `junk`, `archive`.
 2. 对每个启用的文件夹 `SELECT`, 记录 `UIDVALIDITY` 和 `UIDNEXT`.
-3. 按 UID 区间分批 `FETCH` 信封, 标志, 大小和 `BODYSTRUCTURE`, 每批 200 封.
-4. 解析 `Message-ID`, `References`, `In-Reply-To`, 归并线程.
+3. 按 UID 区间分批 `FETCH` 原始头 (`BODY.PEEK[HEADER]`), 标志, 大小和 `BODYSTRUCTURE`, 每批默认 50 封, 由设置 `envelope_batch_size` 控制.
+4. 本地解析头部的 `Message-ID`, `References`, `In-Reply-To`, 主题, 地址和日期, 归并线程; 不请求 IMAP `ENVELOPE`, 避免服务端的畸形结构拖垮整批.
 5. 写入消息元数据, 更新文件夹计数, 然后进入正文预取队列.
 
 增量同步:
@@ -368,44 +368,45 @@ sequenceDiagram
 - POP3 账号只有虚拟入口和本地草稿/发送中; 服务器端没有文件夹.
 - 设计理由: 客户端和服务商同时保存发送副本会产生重复, 所以 Sent 只拉取并用 `sent_copy_mode` 决定副本来源; 草稿放进服务器 Drafts 会涉及多副本删除和并发冲突, v1 用后端草稿, 语义更可控.
 
-### 4.6 资源检测与并发
+### 4.6 连接复用, 资源检测与并发
 
-并发默认自动, 不做固定值. 启动时检测容器实际可用的 CPU 和内存, 再换算成同步, 拉取, 搜索和索引参数:
+网络并发与本地并发分开, 因为压力落在不同地方:
 
-- CPU: 读取 cgroup v2 `cpu.max` 或 cgroup v1 `cpu.cfs_quota_us` / `cpu.cfs_period_us`, 同时参考 cpuset 和 `runtime.NumCPU()`, 取最小值.
-- 内存: 读取 cgroup v2 `memory.max` 或 cgroup v1 `memory.limit_in_bytes`; 无限制时回退到 `/proc/meminfo`.
-- Docker Compose 的 `deploy.resources.limits` 和 `mem_limit` / `cpus` 会体现在 cgroup 中, 不需要单独读取 Compose 文件.
-- 检测结果写入启动日志, 并在设置页显示"检测到 N CPU / M 内存".
-
-并发池分开计算:
-
-| 参数 | 作用 | 自动规则 |
+| 参数 | 作用 | 取值 |
 | --- | --- | --- |
-| `sync_concurrency` | 同时同步的邮箱账号数 | `clamp(ceil(cpu), 1, 6)` |
-| `fetch_concurrency` | 全局正文和附件拉取并发 | `clamp(ceil(cpu*2), 2, 16)`, 再按内存上限收敛 |
-| `search_concurrency` | 同时执行的 Bleve 查询数 | `clamp(ceil(cpu), 1, 8)` |
-| `index_batch_size` | 单批写入 Bleve 的文档数 | `clamp(cpu*100, 50, 500)` |
+| `sync_concurrency` | 同时同步的邮箱账号数 | 操作者设置, 默认 2 |
+| `fetch_concurrency` | 全局正文和附件拉取并发 | 操作者设置, 默认 2 |
+| `envelope_batch_size` | 单条 IMAP FETCH 的信封数量 | 操作者设置, 默认 50, 范围 1-200 |
+| `search_concurrency` | 同时执行的 Bleve 查询数 | 按 CPU 推荐: `clamp(ceil(cpu), 1, 8)` |
+| `index_batch_size` | 单批写入 Bleve 的文档数 | 按 CPU 推荐: `clamp(cpu*100, 50, 500)` |
 
+- 同步和拉取并发不按 CPU 或内存推导: 请求压力在远端服务商, 本机资源检测不能代表服务商限额. 默认保守, 在设置页"性能与并发"中修改, 保存后作用于新任务.
+- 搜索和索引按 cgroup v1/v2 的 CPU 限制推荐, 索引完全本地执行, 不访问网络.
+- CPU: 读取 cgroup v2 `cpu.max` 或 cgroup v1 `cpu.cfs_quota_us` / `cpu.cfs_period_us`, 同时参考 cpuset 和 `runtime.NumCPU()`, 取最小值.
+- 内存: 读取 cgroup v2 `memory.max` 或 cgroup v1 `memory.limit_in_bytes`; 无限制时回退到 `/proc/meminfo`, 仅用于展示.
+- Docker Compose 的 `deploy.resources.limits` 和 `mem_limit` / `cpus` 会体现在 cgroup 中, 不需要单独读取 Compose 文件.
+- 检测结果写入启动日志, 并在设置页显示"检测到 N CPU / M 内存"; 检测失败时回退到 `runtime.NumCPU()`.
 - Bleve 写入固定为单 writer, 不因为 CPU 多就并行写索引; 并行度只体现在查询和批大小.
-- 每个账号的正文拉取仍有独立上限, 默认 2, 不能超过全局 `fetch_concurrency`.
-- 内存预算按每个拉取 worker 约 128 MiB 估算, 预留至少 256 MiB 给进程和数据库连接池.
-- 自动模式在启动, 修改并发设置和手动"重新检测"时重新计算; 正在运行的任务继续使用旧值, 新任务使用新值.
-- 手动模式可以覆盖四个参数, 范围 1-32; 超过内存预算时界面警告但不阻止, 由用户确认.
-- 检测失败时回退到 `runtime.NumCPU()` 和保守并发, 不让启动失败.
 
-本地并发只决定同时处理多少工作; 对远端的建连速率单独控制, 不跟随 CPU 和内存:
+同一账号的连接模型:
 
-- 到同一远端主机的建连按固定间隔排队, 默认 2 秒, 覆盖账号同步, 正文拉取, 待办操作, 草稿同步和 IDLE 重连.
-- 用户主动打开的正文, 原始邮件和附件请求不排入后台建连队列, 避免等待预取任务; 后台预取仍然限速.
+- 每账号最多两条 IMAP 连接: 一条工作连接承担同步, 正文/原文/附件拉取, 待办操作和草稿写入; 一条 IDLE 连接只接收变更通知.
+- 工作连接由 `internal/mailsession` 管理: 按账号串行执行, 成功后复用, 出错或连接关闭后丢弃, 空闲 3 分钟关闭.
+- 后台任务按先进先出排队; 用户主动请求插队, 250ms 内拿不到连接时使用临时连接, 不等待长同步结束.
+- 单条连接内也不连续轰炸: 信封每批默认 50 封, 由设置 `envelope_batch_size` 控制, 批间至少 200ms; 后台正文每次 `FETCH` 前至少 200ms; 交互读取跳过该间隔.
+
+远端建连:
+
+- 同一主机的建连按 2 秒间隔排队 (`internal/netpace`), 覆盖工作连接, IDLE 重连, POP3 和草稿推送.
 - 同一账号连续同步失败时, 计划同步的间隔按 2 倍递增, 最多 8 倍配置间隔; 手动同步和发送不受退避影响.
 - 同步类任务失败时标记为 `failed` 并复用同一条 `(type, account_id)` 记录, 不因周期性重试堆积任务行.
 
 设置页放在"邮件 > 性能与并发":
 
 - 显示检测到的 CPU, 内存和 cgroup 版本.
-- 显示自动计算出的四个值.
-- 提供自动/手动切换和"重新检测"按钮.
-- 手动值保存后立即生效于新任务, 不重启进程.
+- 同步并发和拉取并发可编辑, 默认 2, 范围 1-32.
+- 搜索并发和索引批大小只读, 跟随检测结果.
+- "重新检测"只刷新本地推荐值, 不修改同步和拉取并发.
 
 ### 4.7 运行时配置
 

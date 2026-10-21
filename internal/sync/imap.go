@@ -15,7 +15,29 @@ import (
 	"github.com/mailquay/mailquay/internal/store/sqlcgen"
 )
 
-const envelopeBatch = 200
+// defaultEnvelopeBatch is used when the operator setting is somehow absent.
+const defaultEnvelopeBatch = 50
+
+// maxEnvelopeBatch bounds the operator setting so one FETCH response cannot
+// grow without limit.
+const maxEnvelopeBatch = 200
+
+// envelopeBatchInterval spaces FETCH commands on one connection. Providers
+// throttle command and byte rates as well as connection counts, so batches are
+// paced even though the connection is reused.
+const envelopeBatchInterval = 200 * time.Millisecond
+
+// envelopeBatchSize returns the configured per-FETCH envelope count.
+func (s *Service) envelopeBatchSize() int {
+	size := s.settings.Current().EnvelopeBatchSize
+	if size < 1 {
+		return defaultEnvelopeBatch
+	}
+	if size > maxEnvelopeBatch {
+		return maxEnvelopeBatch
+	}
+	return size
+}
 
 func (s *Service) imapConfig(acct sqlcgen.Account, creds account.Credentials) imapclient.Config {
 	addr := ""
@@ -28,12 +50,7 @@ func (s *Service) imapConfig(acct sqlcgen.Account, creds account.Credentials) im
 	}
 }
 
-func (s *Service) syncIMAP(ctx context.Context, acct sqlcgen.Account, creds account.Credentials) error {
-	client, err := s.dialIMAP(ctx, s.imapConfig(acct, creds))
-	if err != nil {
-		return fmt.Errorf("connect imap: %w", err)
-	}
-	defer client.Close()
+func (s *Service) syncIMAP(ctx context.Context, client *imapclient.Client, acct sqlcgen.Account) error {
 	folders, err := client.List(ctx)
 	if err != nil {
 		return fmt.Errorf("list imap folders: %w", err)
@@ -118,8 +135,12 @@ func (s *Service) syncIMAPMailbox(ctx context.Context, client *imapclient.Client
 		}
 	}
 	done := 0
-	for start := 0; start < len(uids); start += envelopeBatch {
-		end := start + envelopeBatch
+	batchSize := s.envelopeBatchSize()
+	for start := 0; start < len(uids); start += batchSize {
+		if start > 0 && !sleepCtx(ctx, envelopeBatchInterval) {
+			return ctx.Err()
+		}
+		end := start + batchSize
 		if end > len(uids) {
 			end = len(uids)
 		}

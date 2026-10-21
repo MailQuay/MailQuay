@@ -296,18 +296,12 @@ func (s *Service) appendToSent(ctx context.Context, acct sqlcgen.Account, draft 
 	if err != nil {
 		return fmt.Errorf("sent mailbox not found: %w", err)
 	}
-	client, err := s.dialIMAP(ctx, imapclient.Config{
-		Address: deref(acct.ImapAddr), Security: acct.ImapSecurity, Username: acct.Username,
-		Password: creds.Password, AccessToken: creds.AccessToken, Timeout: 30 * time.Second,
+	return s.sessions.Do(ctx, acct.ID, false, s.imapDialer(acct, creds), func(ctx context.Context, client *imapclient.Client) error {
+		if _, err := client.Append(ctx, sent.Path, []string{"\\Seen"}, time.Now().UTC(), raw); err != nil {
+			return err
+		}
+		return nil
 	})
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-	if _, err := client.Append(ctx, sent.Path, []string{"\\Seen"}, time.Now().UTC(), raw); err != nil {
-		return err
-	}
-	return nil
 }
 
 func (s *Service) storeLocalSent(ctx context.Context, acct sqlcgen.Account, ident sqlcgen.Identity, draft sqlcgen.Draft, raw []byte) error {

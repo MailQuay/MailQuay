@@ -39,6 +39,7 @@ func TestHTTPAuthAndAccountFlow(t *testing.T) {
 	cfg := &config.Config{
 		DatabaseURL: dsn, DataDir: dataDir, SearchPath: filepath.Join(dataDir, "search"),
 		SecretKey: mustKey(t), ListenAddr: ":0", SetupToken: "setup-token",
+		CORSOrigins: []string{"https://app.example.com"},
 	}
 	application, err := app.New(ctx, cfg)
 	if err != nil {
@@ -86,11 +87,10 @@ func TestHTTPAuthAndAccountFlow(t *testing.T) {
 		t.Fatalf("settings not persisted: %+v", settings)
 	}
 	resp = sendJSON(t, client, http.MethodPatch, base+"/settings", map[string]any{
-		"publicUrl": "https://mail.example.com", "sessionTtlHours": 72,
+		"sessionTtlHours":     72,
 		"syncIntervalSeconds": 120, "pop3IntervalSeconds": 90,
 		"bodyPrefetchMaxBytes": 1048576, "maxAttachmentBytes": 10485760,
-		"corsOrigins":    []string{"https://app.example.com"},
-		"trustedProxies": []string{"10.0.0.0/8"}, "insecureAllow": []string{"mail.lan"},
+		"syncConcurrency": 3, "fetchConcurrency": 4,
 		"googleClientId": "google-id", "googleClientSecret": "google-secret",
 		"logLevel": "debug",
 	}, csrf)
@@ -100,9 +100,16 @@ func TestHTTPAuthAndAccountFlow(t *testing.T) {
 	}
 	resp.Body.Close()
 	settings = getJSON(t, client, base+"/settings")
-	if settings["publicUrl"] != "https://mail.example.com" || settings["sessionTtlHours"] != float64(72) ||
+	if settings["sessionTtlHours"] != float64(72) ||
 		settings["logLevel"] != "debug" || settings["googleSecretSet"] != true {
 		t.Fatalf("runtime settings not persisted: %+v", settings)
+	}
+	concurrency, _ := settings["concurrency"].(map[string]any)
+	if concurrency["syncConcurrency"] != float64(3) || concurrency["fetchConcurrency"] != float64(4) {
+		t.Fatalf("network concurrency not persisted: %+v", concurrency)
+	}
+	if _, ok := concurrency["searchConcurrency"]; !ok {
+		t.Fatalf("local concurrency missing: %+v", concurrency)
 	}
 	oauth, _ := settings["oauth"].(map[string]any)
 	_ = oauth

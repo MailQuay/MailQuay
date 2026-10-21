@@ -52,17 +52,19 @@ MailQuay/
 │   │   └── oapi/                    # oapi-codegen 生成代码, 不手改
 │   ├── auth/                        # 会话, Argon2id, CSRF, OAuth2 流程
 │   ├── account/                     # 邮箱账号, 地址解析, 凭据加密, 连接测试
+│   ├── emclient/                    # eM Client accounts.dat 解析与密码解密
 │   ├── identity/                    # 发件身份, 默认身份, 签名
 │   ├── mailbox/                     # 文件夹树, 角色映射, 计数
 │   ├── message/                     # 元数据, 标志, 移动, 删除, 线程
 │   ├── compose/                     # 草稿, 发信, outbox
 │   ├── sync/                        # 调度器, 每账号 worker, 操作队列
+│   ├── mailsession/                 # 每账号 IMAP 工作连接, 串行队列与交互插队
 │   ├── imapclient/                  # go-imap 封装, IDLE, QRESYNC, 重连
 │   ├── pop3client/                  # POP3 协议实现, UIDL, TOP, RETR, DELE, 轮询
 │   ├── smtpclient/                  # SMTP 提交, STARTTLS, XOAUTH2
 │   ├── mime/                        # 解析, 正文提取, 附件, HTML 清洗
-│   ├── storage/                     # 内容寻址 blob 与正文文本缓存
 │   ├── netpace/                     # 按远端主机排队出站建连, 避免触发服务商限速
+│   ├── storage/                     # 内容寻址 blob 与正文文本缓存
 │   ├── store/                       # pgxpool, sqlc 查询, 事务
 │   ├── search/                      # Bleve 索引, 查询解析, 重建
 │   ├── events/                      # 事件总线, SSE hub, 回放缓冲
@@ -93,21 +95,23 @@ MailQuay/
 | --- | --- | --- |
 | `internal/app` | 组装配置, 存储, 服务, HTTP 路由和后台 worker; 处理信号退出 | 所有内部包 |
 | `internal/config` | 读取环境变量, 设置默认值, 启动时校验 | `platform` |
-| `internal/httpapi` | 路由, 中间件, 参数校验, 错误到 HTTP 的映射 | `auth`, `account`, `identity`, `mailbox`, `message`, `compose`, `search`, `events`, `store` |
+| `internal/httpapi` | 路由, 中间件, 参数校验, 错误到 HTTP 的映射 | `auth`, `account`, `emclient`, `identity`, `mailbox`, `message`, `compose`, `search`, `events`, `store` |
 | `internal/auth` | 密码哈希, 会话, CSRF, OAuth2 授权码流程 | `store`, `crypto`, `platform` |
-| `internal/account` | 邮箱账号, 地址解析, 凭据加密, 连接测试, 同步策略 | `store`, `crypto`, `imapclient`, `pop3client`, `smtpclient`, `platform` |
+| `internal/account` | 邮箱账号, 地址解析, 凭据加密, 连接测试, 同步策略, eM Client 导入会话 | `store`, `crypto`, `emclient`, `imapclient`, `pop3client`, `smtpclient`, `platform` |
+| `internal/emclient` | 读取 eM Client 的 `accounts.dat`, 解密账号密码并输出与存储无关的账号结构 | 无内部依赖 |
 | `internal/identity` | 发件身份, 默认身份, 签名, 使用账号 SMTP | `store`, `account` |
 | `internal/mailbox` | 文件夹角色映射, 未读计数, 同步状态查询 | `store` |
 | `internal/message` | 元数据查询, 标志更新, 移动, 删除, 线程归并 | `store`, `events` |
-| `internal/compose` | 草稿版本, 身份解析, MIME 组装, outbox 状态机 | `store`, `identity`, `account`, `mime`, `smtpclient`, `imapclient`, `storage`, `events`, `netpace` |
-| `internal/sync` | 账号调度, 初次与增量同步, 操作队列, 对账 | `imapclient`, `pop3client`, `mime`, `store`, `storage`, `events`, `search`, `netpace` |
+| `internal/compose` | 草稿版本, 身份解析, MIME 组装, outbox 状态机 | `store`, `identity`, `account`, `mime`, `smtpclient`, `imapclient`, `storage`, `events`, `netpace`, `mailsession` |
+| `internal/sync` | 账号调度, 初次与增量同步, 操作队列, 对账 | `imapclient`, `pop3client`, `mime`, `store`, `storage`, `events`, `search`, `netpace`, `mailsession` |
 | `internal/imapclient` | 连接管理, IDLE, FETCH, STORE, MOVE, APPEND | `crypto`, `platform` |
 | `internal/pop3client` | 连接管理, STAT, UIDL, TOP, RETR, DELE | `crypto`, `platform` |
 | `internal/smtpclient` | TLS 建连, 认证, 提交 | `crypto`, `platform` |
 | `internal/mime` | 流式解析, 纯文本提取, 附件元数据, HTML 白名单清洗 | `platform` |
+| `internal/netpace` | 按远端主机对出站建连排队 | 无 |
+| `internal/mailsession` | 每账号复用一条 IMAP 工作连接, 串行命令, 交互插队 | `imapclient` |
 | `internal/storage` | SHA-256 内容寻址 blob, 正文文本缓存, 临时文件回收 | `platform` |
 | `internal/store` | 仓储接口与 pgx/sqlc 实现, 事务, 迁移入口 | `platform` |
-| `internal/netpace` | 按远端主机对出站建连排队 | 无 |
 | `internal/search` | Bleve 映射, 索引任务, 查询解析, 高亮, 重建 | `store`, `mime`, `storage`, `platform` |
 | `internal/events` | 进程内发布订阅, SSE 序列化, 环形回放 | `platform` |
 | `internal/webassets` | `full` 构建嵌入前端静态资源; `core` 构建返回空实现 | 无 |
@@ -390,8 +394,8 @@ frontend/
 - 自动重试次数设置 `send_retry_limit` 默认 3, 范围 0-10; 永久错误不重试.
 - 同步与存储页面提供删除模式 (`provider_auto`/`local_queue`) 和本地队列保留天数, 默认 30 天.
 - 草稿本地自动保存 2 秒防抖, 最长 10 秒; 输入过程中不调用远端 IMAP.
-- 性能与并发页面显示检测到的 CPU, 内存和 cgroup 版本, 以及自动计算的同步, 拉取, 搜索并发和索引批大小.
-- 性能与并发页面支持自动/手动切换和"重新检测"; 手动值保存后立即作用于新任务.
+- 性能与并发页面显示检测到的 CPU, 内存和 cgroup 版本, 同步和拉取并发以及信封批大小可编辑, 搜索并发和索引批大小按检测结果只读显示.
+- 性能与并发页面提供"重新检测", 只刷新本地推荐值; 同步和拉取并发保存后立即作用于新任务.
 
 ### 4.5 写邮件窗口
 

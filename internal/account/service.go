@@ -75,6 +75,7 @@ type Service struct {
 	cipher    *crypto.Cipher
 	logger    *slog.Logger
 	settings  *settings.Service
+	imports   *importStore
 	OnCreated func(ctx context.Context, accountID uuid.UUID)
 	OnDeleted func(ctx context.Context, accountID uuid.UUID)
 	OnScope   func(ctx context.Context, accountID uuid.UUID)
@@ -82,7 +83,7 @@ type Service struct {
 
 // NewService builds the account service.
 func NewService(st *store.Store, cipher *crypto.Cipher, logger *slog.Logger) *Service {
-	return &Service{store: st, cipher: cipher, logger: logger}
+	return &Service{store: st, cipher: cipher, logger: logger, imports: newImportStore()}
 }
 
 // SetSettings wires runtime OAuth configuration.
@@ -325,7 +326,7 @@ func (s *Service) Test(ctx context.Context, id uuid.UUID) (TestResult, error) {
 	if err != nil {
 		return TestResult{}, err
 	}
-	result := TestResult{}
+	result := TestResult{Errors: []string{}}
 	timeout := 15 * time.Second
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()

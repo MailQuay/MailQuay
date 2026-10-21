@@ -39,11 +39,9 @@ type Values struct {
 	GoogleFaviconAvatars     bool   `json:"googleFaviconAvatars"`
 	Timezone                 string `json:"timezone"`
 	Language                 string `json:"language"`
-	ConcurrencyMode          string `json:"concurrencyMode"`
 	SyncConcurrency          int    `json:"syncConcurrency"`
 	FetchConcurrency         int    `json:"fetchConcurrency"`
-	SearchConcurrency        int    `json:"searchConcurrency"`
-	IndexBatchSize           int    `json:"indexBatchSize"`
+	EnvelopeBatchSize        int    `json:"envelopeBatchSize"`
 	SessionTTLHours          int    `json:"sessionTtlHours"`
 	SyncIntervalSeconds      int    `json:"syncIntervalSeconds"`
 	POP3IntervalSeconds      int    `json:"pop3IntervalSeconds"`
@@ -54,13 +52,13 @@ type Values struct {
 	LogLevel                 string `json:"logLevel"`
 }
 
-// Concurrency is the effective worker configuration.
+// Concurrency is the effective worker configuration. Network pools come from
+// operator settings; search and index pools follow detected local resources.
 type Concurrency struct {
-	Mode              string `json:"mode"`
-	SyncConcurrency   int    `json:"syncConcurrency"`
-	FetchConcurrency  int    `json:"fetchConcurrency"`
-	SearchConcurrency int    `json:"searchConcurrency"`
-	IndexBatchSize    int    `json:"indexBatchSize"`
+	SyncConcurrency   int `json:"syncConcurrency"`
+	FetchConcurrency  int `json:"fetchConcurrency"`
+	SearchConcurrency int `json:"searchConcurrency"`
+	IndexBatchSize    int `json:"indexBatchSize"`
 }
 
 // Secrets reports which write-only secrets are configured.
@@ -73,7 +71,6 @@ type Secrets struct {
 type Snapshot struct {
 	Values    Values             `json:"values"`
 	Resources platform.Resources `json:"resources"`
-	Auto      Concurrency        `json:"auto"`
 	Effective Concurrency        `json:"effective"`
 	Secrets   Secrets            `json:"secrets"`
 }
@@ -113,11 +110,9 @@ func Defaults() Values {
 		GoogleFaviconAvatars:     true,
 		Timezone:                 "UTC",
 		Language:                 "en",
-		ConcurrencyMode:          "auto",
 		SyncConcurrency:          2,
-		FetchConcurrency:         4,
-		SearchConcurrency:        2,
-		IndexBatchSize:           100,
+		FetchConcurrency:         2,
+		EnvelopeBatchSize:        50,
 		SessionTTLHours:          168,
 		SyncIntervalSeconds:      300,
 		POP3IntervalSeconds:      300,
@@ -146,7 +141,7 @@ func NewService(st *store.Store, resources platform.Resources, cipher *crypto.Ci
 	s := &Service{store: st, cipher: cipher, bootstrap: bootstrap, resources: resources, secrets: map[string]string{}}
 	base := Defaults()
 	applyBootstrap(&base, bootstrap)
-	s.cache.Store(&Snapshot{Values: base, Resources: resources, Auto: AutoConcurrency(resources, base), Effective: AutoConcurrency(resources, base)})
+	s.cache.Store(&Snapshot{Values: base, Resources: resources, Effective: EffectiveConcurrency(base, resources)})
 	return s
 }
 
@@ -165,12 +160,7 @@ func (s *Service) SetResources(r platform.Resources) {
 	if snap := s.cache.Load(); snap != nil {
 		updated := *snap
 		updated.Resources = r
-		updated.Auto = AutoConcurrency(r, updated.Values)
-		if updated.Values.ConcurrencyMode == "manual" {
-			updated.Effective = manualConcurrency(updated.Values)
-		} else {
-			updated.Effective = updated.Auto
-		}
+		updated.Effective = EffectiveConcurrency(updated.Values, r)
 		s.cache.Store(&updated)
 	}
 }
@@ -217,13 +207,8 @@ func (s *Service) Get(ctx context.Context) (Snapshot, error) {
 		}
 	}
 	resources := s.Resources()
-	auto := AutoConcurrency(resources, values)
-	effective := auto
-	if values.ConcurrencyMode == "manual" {
-		effective = manualConcurrency(values)
-	}
 	snap := Snapshot{
-		Values: values, Resources: resources, Auto: auto, Effective: effective,
+		Values: values, Resources: resources, Effective: EffectiveConcurrency(values, resources),
 		Secrets: Secrets{
 			GoogleSecretSet:    secrets["google_client_secret"] != "",
 			MicrosoftSecretSet: secrets["microsoft_client_secret"] != "",
@@ -251,7 +236,7 @@ func (s *Service) CurrentSnapshot() Snapshot {
 	}
 	v := Defaults()
 	resources := s.Resources()
-	return Snapshot{Values: v, Resources: resources, Auto: AutoConcurrency(resources, v), Effective: AutoConcurrency(resources, v)}
+	return Snapshot{Values: v, Resources: resources, Effective: EffectiveConcurrency(v, resources)}
 }
 
 // OAuthSecret returns a decrypted provider secret.
@@ -357,36 +342,27 @@ func (s *Service) storeSecret(ctx context.Context, key string, raw json.RawMessa
 	return s.store.UpsertSetting(ctx, sqlcgen.UpsertSettingParams{Key: canonicalKey(key), Value: encoded})
 }
 
-// AutoConcurrency derives worker counts from detected resources.
-func AutoConcurrency(res platform.Resources, v Values) Concurrency {
+// EffectiveConcurrency combines operator-set network pools with local pools.
+// Sync and fetch concurrency are deliberately not derived from CPU or memory:
+// their pressure lands on the mail provider, so the defaults stay conservative
+// and the operator decides. Search and index work is local, so those values
+// follow detected resources.
+func EffectiveConcurrency(v Values, res platform.Resources) Concurrency {
+	searchN, batch := LocalConcurrency(res)
+	return Concurrency{
+		SyncConcurrency: v.SyncConcurrency, FetchConcurrency: v.FetchConcurrency,
+		SearchConcurrency: searchN, IndexBatchSize: batch,
+	}
+}
+
+// LocalConcurrency recommends search and index pool sizes from detected
+// resources. Indexing never touches the network.
+func LocalConcurrency(res platform.Resources) (searchN, batch int) {
 	cpu := float64(res.CPUs)
 	if cpu < 1 {
 		cpu = 1
 	}
-	syncN := clamp(int(math.Ceil(cpu)), 1, 6)
-	fetchN := clamp(int(math.Ceil(cpu*2)), 2, 16)
-	memoryBudget := res.MemoryBytes - 256<<20
-	if memoryBudget < 0 {
-		memoryBudget = 0
-	}
-	maxByMemory := int(memoryBudget / (128 << 20))
-	if maxByMemory < 2 {
-		maxByMemory = 2
-	}
-	if fetchN > maxByMemory {
-		fetchN = maxByMemory
-	}
-	if fetchN < 2 {
-		fetchN = 2
-	}
-	searchN := clamp(int(math.Ceil(cpu)), 1, 8)
-	batch := clamp(int(cpu*100), 50, 500)
-	return Concurrency{Mode: "auto", SyncConcurrency: syncN, FetchConcurrency: fetchN, SearchConcurrency: searchN, IndexBatchSize: batch}
-}
-
-func manualConcurrency(v Values) Concurrency {
-	return Concurrency{Mode: "manual", SyncConcurrency: v.SyncConcurrency, FetchConcurrency: v.FetchConcurrency,
-		SearchConcurrency: v.SearchConcurrency, IndexBatchSize: v.IndexBatchSize}
+	return clamp(int(math.Ceil(cpu)), 1, 8), clamp(int(cpu*100), 50, 500)
 }
 
 func applyBootstrap(v *Values, b Bootstrap) {
@@ -474,16 +450,12 @@ func decodeInto(key string, raw json.RawMessage, v *Values) error {
 		return json.Unmarshal(raw, &v.Timezone)
 	case "language":
 		return json.Unmarshal(raw, &v.Language)
-	case "concurrency_mode":
-		return json.Unmarshal(raw, &v.ConcurrencyMode)
 	case "sync_concurrency":
 		return json.Unmarshal(raw, &v.SyncConcurrency)
 	case "fetch_concurrency":
 		return json.Unmarshal(raw, &v.FetchConcurrency)
-	case "search_concurrency":
-		return json.Unmarshal(raw, &v.SearchConcurrency)
-	case "index_batch_size":
-		return json.Unmarshal(raw, &v.IndexBatchSize)
+	case "envelope_batch_size":
+		return json.Unmarshal(raw, &v.EnvelopeBatchSize)
 	case "session_ttl_hours":
 		return json.Unmarshal(raw, &v.SessionTTLHours)
 	case "sync_interval_seconds":
@@ -542,16 +514,12 @@ func setField(key string, raw json.RawMessage, v *Values) error {
 		return json.Unmarshal(raw, &v.Timezone)
 	case "language":
 		return json.Unmarshal(raw, &v.Language)
-	case "concurrency_mode":
-		return json.Unmarshal(raw, &v.ConcurrencyMode)
 	case "sync_concurrency":
 		return json.Unmarshal(raw, &v.SyncConcurrency)
 	case "fetch_concurrency":
 		return json.Unmarshal(raw, &v.FetchConcurrency)
-	case "search_concurrency":
-		return json.Unmarshal(raw, &v.SearchConcurrency)
-	case "index_batch_size":
-		return json.Unmarshal(raw, &v.IndexBatchSize)
+	case "envelope_batch_size":
+		return json.Unmarshal(raw, &v.EnvelopeBatchSize)
 	case "session_ttl_hours":
 		return json.Unmarshal(raw, &v.SessionTTLHours)
 	case "sync_interval_seconds":
@@ -610,16 +578,12 @@ func fieldValue(key string, v Values) (any, error) {
 		return v.Timezone, nil
 	case "language":
 		return v.Language, nil
-	case "concurrency_mode":
-		return v.ConcurrencyMode, nil
 	case "sync_concurrency":
 		return v.SyncConcurrency, nil
 	case "fetch_concurrency":
 		return v.FetchConcurrency, nil
-	case "search_concurrency":
-		return v.SearchConcurrency, nil
-	case "index_batch_size":
-		return v.IndexBatchSize, nil
+	case "envelope_batch_size":
+		return v.EnvelopeBatchSize, nil
 	case "session_ttl_hours":
 		return v.SessionTTLHours, nil
 	case "sync_interval_seconds":
@@ -669,16 +633,13 @@ func validate(v Values) error {
 	if v.DeleteQueueDays < 1 || v.DeleteQueueDays > 365 {
 		return errors.New("deleteQueueDays must be 1-365")
 	}
-	if v.ConcurrencyMode != "auto" && v.ConcurrencyMode != "manual" {
-		return errors.New("invalid concurrencyMode")
-	}
-	for _, n := range []int{v.SyncConcurrency, v.FetchConcurrency, v.SearchConcurrency} {
+	for _, n := range []int{v.SyncConcurrency, v.FetchConcurrency} {
 		if n < 1 || n > 32 {
 			return errors.New("concurrency values must be 1-32")
 		}
 	}
-	if v.IndexBatchSize < 50 || v.IndexBatchSize > 500 {
-		return errors.New("indexBatchSize must be 50-500")
+	if v.EnvelopeBatchSize < 1 || v.EnvelopeBatchSize > 200 {
+		return errors.New("envelopeBatchSize must be 1-200")
 	}
 	if v.Language != "en" && v.Language != "zh-CN" {
 		return errors.New("language must be en or zh-CN")

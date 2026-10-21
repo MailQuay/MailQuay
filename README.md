@@ -23,8 +23,9 @@ MailQuay is not a mail server. It does not run an MTA, does not own a domain, an
 - POP3 compatibility mode for providers that only expose POP3: one virtual inbox, polling, UIDL tracking, and local-only flags.
 - Per-account sync range (all time by default, or 1 day to 1 year) and download scope (headers, full without attachments, or full with attachments), fetched and indexed in the background.
 - Per-account protocol configuration with custom host, port, and TLS mode for IMAP, POP3, and SMTP.
+- Import mailbox accounts from an eM Client desktop database; existing addresses and OAuth2 accounts stay disabled.
 - Runtime settings (sync intervals, limits, OAuth apps, log level) stored in PostgreSQL and edited in the web UI; public URL, CORS, trusted proxies and insecure-host exemptions come from environment variables.
-- Automatic sync and search concurrency derived from container CPU and memory limits, with manual overrides.
+- Conservative sync and fetch concurrency with user overrides; search and indexing follow detected container CPU.
 - Compose, reply, forward, drafts, attachments, scheduled send, and a retrying outbox with a configurable retry limit.
 - Multiple sender identities per mailbox account, each with its own signature and reply settings.
 - Local marked mail keeps full bodies and attachments and survives account removal by default.

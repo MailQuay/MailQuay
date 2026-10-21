@@ -23,6 +23,7 @@ import (
 	"github.com/mailquay/mailquay/internal/identity"
 	"github.com/mailquay/mailquay/internal/imapclient"
 	"github.com/mailquay/mailquay/internal/mailbox"
+	"github.com/mailquay/mailquay/internal/mailsession"
 	"github.com/mailquay/mailquay/internal/message"
 	"github.com/mailquay/mailquay/internal/platform"
 	"github.com/mailquay/mailquay/internal/settings"
@@ -108,7 +109,7 @@ func TestIMAPInitialSyncAndBodyFetch(t *testing.T) {
 	ids := identity.NewService(st)
 	mailboxes := mailbox.NewService(st)
 	messages := message.NewService(st, hub, blobs, logger)
-	syncer := mailsync.NewService(st, cfg, logger, hub, blobs, accounts, mailboxes, messages, settingsSvc, nil)
+	syncer := mailsync.NewService(st, cfg, logger, hub, blobs, accounts, mailboxes, messages, settingsSvc, nil, mailsession.NewPool(time.Minute))
 	messages.SetContent(syncer)
 
 	acct, err := accounts.Create(ctx, account.Input{

@@ -26,6 +26,7 @@ import (
 	"github.com/mailquay/mailquay/internal/events"
 	"github.com/mailquay/mailquay/internal/imapclient"
 	"github.com/mailquay/mailquay/internal/mailbox"
+	"github.com/mailquay/mailquay/internal/mailsession"
 	"github.com/mailquay/mailquay/internal/message"
 	"github.com/mailquay/mailquay/internal/netpace"
 	"github.com/mailquay/mailquay/internal/platform"
@@ -107,7 +108,7 @@ func TestIMAPMailboxFailureFinalizesTask(t *testing.T) {
 	accounts := account.NewService(st, cipher, logger)
 	mailboxes := mailbox.NewService(st)
 	messages := message.NewService(st, hub, blobs, logger)
-	syncer := mailsync.NewService(st, cfg, logger, hub, blobs, accounts, mailboxes, messages, settingsSvc, nil)
+	syncer := mailsync.NewService(st, cfg, logger, hub, blobs, accounts, mailboxes, messages, settingsSvc, nil, mailsession.NewPool(time.Minute))
 	messages.SetContent(syncer)
 
 	acct, err := accounts.Create(ctx, account.Input{
@@ -288,7 +289,7 @@ func TestIMAPDialPacing(t *testing.T) {
 	mailboxes := mailbox.NewService(st)
 	messages := message.NewService(st, hub, blobs, platform.NewLogger("error", "text"))
 	pacer := netpace.New(time.Second)
-	syncer := mailsync.NewService(st, cfg, platform.NewLogger("error", "text"), hub, blobs, accounts, mailboxes, messages, settingsSvc, pacer)
+	syncer := mailsync.NewService(st, cfg, platform.NewLogger("error", "text"), hub, blobs, accounts, mailboxes, messages, settingsSvc, pacer, mailsession.NewPool(time.Minute))
 	messages.SetContent(syncer)
 
 	first, err := accounts.Create(ctx, account.Input{

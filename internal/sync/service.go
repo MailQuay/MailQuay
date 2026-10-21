@@ -15,6 +15,7 @@ import (
 	"github.com/mailquay/mailquay/internal/events"
 	"github.com/mailquay/mailquay/internal/imapclient"
 	"github.com/mailquay/mailquay/internal/mailbox"
+	"github.com/mailquay/mailquay/internal/mailsession"
 	"github.com/mailquay/mailquay/internal/message"
 	"github.com/mailquay/mailquay/internal/netpace"
 	"github.com/mailquay/mailquay/internal/platform"
@@ -37,6 +38,7 @@ type Service struct {
 	messages  *message.Service
 	settings  *settings.Service
 	pacer     *netpace.Pacer
+	sessions  *mailsession.Pool
 
 	fetchLim *limiter
 	syncLim  *limiter
@@ -62,7 +64,8 @@ type bodyRequest struct {
 // NewService wires the synchronization service.
 func NewService(st *store.Store, cfg *config.Config, logger *slog.Logger, hub *events.Hub,
 	blobs *storage.Store, accounts *account.Service, mailboxes *mailbox.Service,
-	messages *message.Service, settingsSvc *settings.Service, pacer *netpace.Pacer) *Service {
+	messages *message.Service, settingsSvc *settings.Service, pacer *netpace.Pacer,
+	sessions *mailsession.Pool) *Service {
 	concurrency := settingsSvc.Resources()
 	syncN := 2
 	fetchN := 4
@@ -75,6 +78,7 @@ func NewService(st *store.Store, cfg *config.Config, logger *slog.Logger, hub *e
 		store: st, cfg: cfg, logger: logger, hub: hub, storage: blobs,
 		accounts: accounts, mailboxes: mailboxes, messages: messages, settings: settingsSvc,
 		pacer:    pacer,
+		sessions: sessions,
 		fetchLim: newLimiter(fetchN), syncLim: newLimiter(syncN),
 		workers: make(map[uuid.UUID]context.CancelFunc), lastRun: make(map[uuid.UUID]time.Time),
 		failures: make(map[uuid.UUID]int), idle: make(map[uuid.UUID]context.CancelFunc),
@@ -139,8 +143,14 @@ func (s *Service) TriggerMailbox(ctx context.Context, mailboxID uuid.UUID) error
 	return nil
 }
 
+// ForgetAccount drops any pooled connection for a deleted account.
+func (s *Service) ForgetAccount(accountID uuid.UUID) {
+	s.sessions.Drop(accountID)
+}
+
 // ReconcileScope applies range and download-scope changes after an account edit.
 func (s *Service) ReconcileScope(ctx context.Context, accountID uuid.UUID) {
+	s.sessions.Drop(accountID)
 	if err := s.startTask(ctx, "scope_reconcile", &accountID, 0, 0, "reconciling scope"); err != nil {
 		s.logger.Warn("start reconcile task", "account", accountID, "error", err)
 	}
@@ -273,7 +283,9 @@ func (s *Service) syncAccount(ctx context.Context, accountID uuid.UUID) error {
 	var syncErr error
 	switch acct.ReceiveProtocol {
 	case "imap":
-		syncErr = s.syncIMAP(ctx, acct, creds)
+		syncErr = s.sessions.Do(ctx, acct.ID, false, s.imapDialer(acct, creds), func(ctx context.Context, client *imapclient.Client) error {
+			return s.syncIMAP(ctx, client, acct)
+		})
 	case "pop3":
 		syncErr = s.syncPOP3(ctx, acct, creds)
 	default:
@@ -287,6 +299,19 @@ func (s *Service) syncAccount(ctx context.Context, accountID uuid.UUID) error {
 	}
 	_ = s.store.SetAccountState(ctx, sqlcgen.SetAccountStateParams{ID: acct.ID, SyncState: "connected", LastError: ""})
 	return nil
+}
+
+// imapDialer returns the dialer used by the account session. Background work
+// is paced per host; the interactive fallback dials directly so opening a
+// message never waits for a sync to finish.
+func (s *Service) imapDialer(acct sqlcgen.Account, creds account.Credentials) mailsession.DialFunc {
+	cfg := s.imapConfig(acct, creds)
+	return func(ctx context.Context, interactive bool) (*imapclient.Client, error) {
+		if interactive {
+			return imapclient.Dial(ctx, cfg)
+		}
+		return s.dialIMAP(ctx, cfg)
+	}
 }
 
 // dialIMAP reserves this host's next connection slot before dialing. Providers

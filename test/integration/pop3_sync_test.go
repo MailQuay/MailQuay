@@ -20,6 +20,7 @@ import (
 	"github.com/mailquay/mailquay/internal/crypto"
 	"github.com/mailquay/mailquay/internal/events"
 	"github.com/mailquay/mailquay/internal/mailbox"
+	"github.com/mailquay/mailquay/internal/mailsession"
 	"github.com/mailquay/mailquay/internal/message"
 	"github.com/mailquay/mailquay/internal/platform"
 	"github.com/mailquay/mailquay/internal/settings"
@@ -182,7 +183,7 @@ func TestPOP3InitialSync(t *testing.T) {
 	accounts := account.NewService(st, cipher, logger)
 	mailboxes := mailbox.NewService(st)
 	messages := message.NewService(st, hub, blobs, logger)
-	syncer := mailsync.NewService(st, cfg, logger, hub, blobs, accounts, mailboxes, messages, settingsSvc, nil)
+	syncer := mailsync.NewService(st, cfg, logger, hub, blobs, accounts, mailboxes, messages, settingsSvc, nil, mailsession.NewPool(time.Minute))
 	messages.SetContent(syncer)
 
 	acct, err := accounts.Create(ctx, account.Input{

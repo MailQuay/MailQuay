@@ -6,23 +6,30 @@ import (
 	"github.com/mailquay/mailquay/internal/platform"
 )
 
-func TestAutoConcurrency(t *testing.T) {
+func TestEffectiveConcurrency(t *testing.T) {
 	cases := []struct {
 		res           platform.Resources
 		sync, fetch   int
 		search, batch int
 	}{
-		{platform.Resources{CPUs: 1, MemoryBytes: 4 << 30}, 1, 2, 1, 100},
-		{platform.Resources{CPUs: 2, MemoryBytes: 8 << 30}, 2, 4, 2, 200},
-		{platform.Resources{CPUs: 8, MemoryBytes: 16 << 30}, 6, 16, 8, 500},
-		{platform.Resources{CPUs: 32, MemoryBytes: 512 << 20}, 6, 2, 8, 500},
+		{platform.Resources{CPUs: 1, MemoryBytes: 4 << 30}, 2, 2, 1, 100},
+		{platform.Resources{CPUs: 2, MemoryBytes: 8 << 30}, 2, 2, 2, 200},
+		{platform.Resources{CPUs: 8, MemoryBytes: 16 << 30}, 2, 2, 8, 500},
+		{platform.Resources{CPUs: 0, MemoryBytes: 0}, 2, 2, 1, 100},
 	}
 	for _, tc := range cases {
-		got := AutoConcurrency(tc.res, Defaults())
+		got := EffectiveConcurrency(Defaults(), tc.res)
 		if got.SyncConcurrency != tc.sync || got.FetchConcurrency != tc.fetch ||
 			got.SearchConcurrency != tc.search || got.IndexBatchSize != tc.batch {
-			t.Errorf("AutoConcurrency(%+v) = %+v", tc.res, got)
+			t.Errorf("EffectiveConcurrency(%+v) = %+v", tc.res, got)
 		}
+	}
+	v := Defaults()
+	v.SyncConcurrency = 5
+	v.FetchConcurrency = 7
+	got := EffectiveConcurrency(v, platform.Resources{CPUs: 4})
+	if got.SyncConcurrency != 5 || got.FetchConcurrency != 7 {
+		t.Fatalf("operator values were overridden: %+v", got)
 	}
 }
 

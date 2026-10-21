@@ -137,8 +137,12 @@ func (s *Server) TestAccount(w http.ResponseWriter, r *http.Request, id oapi.Acc
 		s.error(w, r, http.StatusBadGateway, "connection_test_failed", err.Error())
 		return
 	}
+	errors := result.Errors
+	if errors == nil {
+		errors = []string{}
+	}
 	writeJSON(w, http.StatusOK, oapi.ConnectionTestResult{
-		ReceiveOk: result.ReceiveOK, SmtpOk: result.SMTPOK, Errors: result.Errors,
+		ReceiveOk: result.ReceiveOK, SmtpOk: result.SMTPOK, Errors: errors,
 	})
 }
 

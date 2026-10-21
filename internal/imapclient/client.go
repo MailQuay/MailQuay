@@ -15,6 +15,7 @@ import (
 	"io"
 	"mime"
 	"net"
+	"net/mail"
 	"sort"
 	"strconv"
 	"strings"
@@ -235,6 +236,21 @@ func Dial(ctx context.Context, cfg Config) (*Client, error) {
 	return c, nil
 }
 
+// Closed reports whether the underlying connection is gone. A fatal protocol
+// error or an explicit Close makes it true; callers use it to discard pooled
+// connections instead of reusing a desynchronized stream.
+func (c *Client) Closed() bool {
+	if c == nil || c.c == nil {
+		return true
+	}
+	select {
+	case <-c.c.Closed():
+		return true
+	default:
+		return false
+	}
+}
+
 // Close closes the connection. It is safe to call more than once.
 func (c *Client) Close() error {
 	c.closeOnce.Do(func() {
@@ -392,9 +408,10 @@ func (c *Client) search(ctx context.Context, criteria *imap.SearchCriteria) ([]u
 	return uids, err
 }
 
-// FetchEnvelopes returns metadata for uids, sorted by UID. Malformed
-// individual envelopes are returned with whatever fields could be parsed
-// instead of failing the batch.
+// FetchEnvelopes returns metadata for uids, sorted by UID. Headers are fetched
+// as raw bytes and parsed locally: the IMAP ENVELOPE item is a nested structure
+// that some servers emit malformed, and a single bad envelope desynchronizes
+// the whole fetch.
 func (c *Client) FetchEnvelopes(ctx context.Context, uids []uint32) ([]Envelope, error) {
 	if len(uids) == 0 {
 		return nil, nil
@@ -405,15 +422,13 @@ func (c *Client) FetchEnvelopes(ctx context.Context, uids []uint32) ([]Envelope,
 	var out []Envelope
 	err := c.do(ctx, func() error {
 		opts := &imap.FetchOptions{
-			Envelope:     true,
 			Flags:        true,
 			RFC822Size:   true,
 			InternalDate: true,
 			ModSeq:       c.hasCap(imap.CapCondStore),
 			BodySection: []*imap.FetchItemBodySection{{
-				Specifier:    imap.PartSpecifierHeader,
-				HeaderFields: []string{"References"},
-				Peek:         true,
+				Specifier: imap.PartSpecifierHeader,
+				Peek:      true,
 			}},
 		}
 		bufs, err := c.c.Fetch(uidSet(uids), opts).Collect()
@@ -444,28 +459,131 @@ func envelopeFromBuffer(buf *gimapc.FetchMessageBuffer) Envelope {
 		ModSeq:       buf.ModSeq,
 		InternalDate: buf.InternalDate,
 	}
-	if e := buf.Envelope; e != nil {
-		env.MessageID = strings.TrimSpace(e.MessageID)
-		if len(e.InReplyTo) > 0 {
-			env.InReplyTo = strings.TrimSpace(e.InReplyTo[0])
+	for _, section := range buf.BodySection {
+		if section.Section != nil && section.Section.Specifier == imap.PartSpecifierHeader {
+			applyHeaders(&env, section.Bytes)
+			break
 		}
-		env.Subject = decodeHeader(e.Subject)
-		env.From = convertAddresses(e.From)
-		env.To = convertAddresses(e.To)
-		env.Cc = convertAddresses(e.Cc)
-		env.Bcc = convertAddresses(e.Bcc)
-		env.SentAt = e.Date
 	}
 	if env.SentAt.IsZero() {
 		env.SentAt = buf.InternalDate
 	}
-	for _, section := range buf.BodySection {
-		if section.Section != nil && section.Section.Specifier == imap.PartSpecifierHeader {
-			env.References = parseReferences(section.Bytes)
+	return env
+}
+
+// applyHeaders fills the envelope fields from a raw header block. Parsing
+// locally keeps one malformed header from aborting the batch and never depends
+// on the server's ENVELOPE encoding.
+func applyHeaders(env *Envelope, raw []byte) {
+	fields := headerFields(raw)
+	env.MessageID = strings.TrimSpace(fields["message-id"])
+	env.InReplyTo = firstMessageID(fields["in-reply-to"])
+	env.Subject = decodeHeader(fields["subject"])
+	env.From = parseAddressList(fields["from"])
+	env.To = parseAddressList(fields["to"])
+	env.Cc = parseAddressList(fields["cc"])
+	env.Bcc = parseAddressList(fields["bcc"])
+	env.References = parseReferences(raw)
+	if at, ok := parseHeaderDate(fields["date"]); ok {
+		env.SentAt = at
+	}
+}
+
+// headerFields unfolds the header block and keeps the first occurrence of each
+// field. Unparseable lines are skipped instead of failing the message.
+func headerFields(raw []byte) map[string]string {
+	fields := make(map[string]string, 16)
+	current := ""
+	for _, line := range strings.Split(strings.ReplaceAll(string(raw), "\r\n", "\n"), "\n") {
+		if line == "" {
 			break
 		}
+		if line[0] == ' ' || line[0] == '\t' {
+			if current != "" {
+				fields[current] += " " + strings.TrimSpace(line)
+			}
+			continue
+		}
+		name, value, ok := strings.Cut(line, ":")
+		if !ok {
+			current = ""
+			continue
+		}
+		current = strings.ToLower(strings.TrimSpace(name))
+		if _, exists := fields[current]; !exists {
+			fields[current] = strings.TrimSpace(value)
+		}
 	}
-	return env
+	return fields
+}
+
+func firstMessageID(value string) string {
+	if start := strings.IndexByte(value, '<'); start >= 0 {
+		if end := strings.IndexByte(value[start:], '>'); end > 0 {
+			return value[start : start+end+1]
+		}
+	}
+	return strings.TrimSpace(value)
+}
+
+func parseHeaderDate(value string) (time.Time, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}, false
+	}
+	if at, err := mail.ParseDate(value); err == nil {
+		return at, true
+	}
+	for _, layout := range []string{time.RFC1123Z, time.RFC1123, time.RFC822Z, time.RFC822, time.ANSIC} {
+		if at, err := time.Parse(layout, value); err == nil {
+			return at, true
+		}
+	}
+	return time.Time{}, false
+}
+
+// parseAddressList decodes an address header. When the server or sender emits
+// something the standard parser rejects, addresses are recovered one by one so
+// the message is still stored.
+func parseAddressList(value string) []Address {
+	if value == "" {
+		return nil
+	}
+	decoded := decodeHeader(value)
+	if list, err := mail.ParseAddressList(decoded); err == nil {
+		out := make([]Address, 0, len(list))
+		for _, addr := range list {
+			out = append(out, Address{Name: decodeHeader(addr.Name), Email: addr.Address})
+		}
+		return out
+	}
+	var out []Address
+	for _, chunk := range strings.Split(decoded, ",") {
+		chunk = strings.TrimSpace(chunk)
+		if chunk == "" {
+			continue
+		}
+		if addr, err := mail.ParseAddress(chunk); err == nil {
+			out = append(out, Address{Name: decodeHeader(addr.Name), Email: addr.Address})
+			continue
+		}
+		if email := bareAddress(chunk); email != "" {
+			out = append(out, Address{Email: email})
+		}
+	}
+	return out
+}
+
+func bareAddress(value string) string {
+	if start := strings.IndexByte(value, '<'); start >= 0 {
+		if end := strings.IndexByte(value[start:], '>'); end > 1 {
+			return strings.TrimSpace(value[start+1 : start+end])
+		}
+	}
+	if strings.Contains(value, "@") && !strings.ContainsAny(value, " \t;") {
+		return strings.Trim(value, "\"'")
+	}
+	return ""
 }
 
 // FetchFlags returns the current flags for uids.
@@ -944,29 +1062,6 @@ func flagStrings(flags []imap.Flag) []string {
 	out := make([]string, 0, len(flags))
 	for _, flag := range flags {
 		out = append(out, string(flag))
-	}
-	return out
-}
-
-func convertAddresses(in []imap.Address) []Address {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make([]Address, 0, len(in))
-	for _, addr := range in {
-		email := strings.TrimSpace(addr.Addr())
-		if email == "" {
-			// Defensive: a few servers put the whole address in Mailbox.
-			mailbox := strings.TrimSpace(addr.Mailbox)
-			if strings.Contains(mailbox, "@") {
-				email = mailbox
-			}
-		}
-		name := decodeHeader(addr.Name)
-		if email == "" && name == "" {
-			continue
-		}
-		out = append(out, Address{Name: name, Email: email})
 	}
 	return out
 }

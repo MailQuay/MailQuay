@@ -71,6 +71,7 @@ func mapSettings(snap settings.Snapshot) oapi.Settings {
 		GoogleFaviconAvatars:          v.GoogleFaviconAvatars,
 		Timezone:                      v.Timezone,
 		Language:                      oapi.SettingsLanguage(v.Language),
+		EnvelopeBatchSize:             v.EnvelopeBatchSize,
 		Concurrency:                   mapConcurrency(snap.Effective),
 		Resources:                     mapResources(snap),
 		SessionTtlHours:               v.SessionTTLHours,
@@ -88,9 +89,8 @@ func mapSettings(snap settings.Snapshot) oapi.Settings {
 
 func mapConcurrency(c settings.Concurrency) oapi.ConcurrencySettings {
 	return oapi.ConcurrencySettings{
-		Mode: oapi.ConcurrencySettingsMode(c.Mode), SyncConcurrency: c.SyncConcurrency,
-		FetchConcurrency: c.FetchConcurrency, SearchConcurrency: c.SearchConcurrency,
-		IndexBatchSize: c.IndexBatchSize,
+		SyncConcurrency: c.SyncConcurrency, FetchConcurrency: c.FetchConcurrency,
+		SearchConcurrency: c.SearchConcurrency, IndexBatchSize: c.IndexBatchSize,
 	}
 }
 
@@ -98,8 +98,7 @@ func mapResources(snap settings.Snapshot) oapi.ResourceInfo {
 	return oapi.ResourceInfo{
 		CgroupVersion: snap.Resources.CgroupVersion, Cpus: snap.Resources.CPUs,
 		MemoryBytes: int(snap.Resources.MemoryBytes), CpuSource: snap.Resources.CPUSource,
-		MemorySource: snap.Resources.MemorySource, Auto: mapConcurrency(snap.Auto),
-		Effective: mapConcurrency(snap.Effective),
+		MemorySource: snap.Resources.MemorySource,
 	}
 }
 

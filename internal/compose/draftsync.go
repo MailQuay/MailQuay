@@ -66,30 +66,30 @@ func (s *Service) pushDraft(ctx context.Context, draft sqlcgen.Draft) error {
 			return err
 		}
 	}
-	client, err := s.dialIMAP(ctx, imapclient.Config{
-		Address: deref(acct.ImapAddr), Security: acct.ImapSecurity, Username: acct.Username,
-		Password: creds.Password, AccessToken: creds.AccessToken, Timeout: 30 * time.Second,
-	})
-	if err != nil {
-		return err
-	}
-	defer client.Close()
 	msgID := "<" + draft.ID.String() + "@" + messageDomain(ident.Email) + ">"
 	raw, err := s.buildDraftMIME(ctx, acct, ident, draft, msgID)
 	if err != nil {
 		return err
 	}
-	uid, err := client.Append(ctx, draftsBox.Path, []string{"\\Draft"}, time.Now().UTC(), raw)
-	if err != nil {
-		return fmt.Errorf("append draft: %w", err)
-	}
-	if draft.RemoteUid != nil {
-		if _, err := client.Select(ctx, draftsBox.Path); err == nil {
-			old := uint32(*draft.RemoteUid)
-			if err := client.StoreFlags(ctx, old, []string{"\\Deleted"}, true); err == nil {
-				_ = client.Expunge(ctx, []uint32{old})
+	var uid uint32
+	err = s.sessions.Do(ctx, acct.ID, false, s.imapDialer(acct, creds), func(ctx context.Context, client *imapclient.Client) error {
+		appended, err := client.Append(ctx, draftsBox.Path, []string{"\\Draft"}, time.Now().UTC(), raw)
+		if err != nil {
+			return fmt.Errorf("append draft: %w", err)
+		}
+		uid = appended
+		if draft.RemoteUid != nil {
+			if _, err := client.Select(ctx, draftsBox.Path); err == nil {
+				old := uint32(*draft.RemoteUid)
+				if err := client.StoreFlags(ctx, old, []string{"\\Deleted"}, true); err == nil {
+					_ = client.Expunge(ctx, []uint32{old})
+				}
 			}
 		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 	var uidValidity *int64
 	if draftsBox.Uidvalidity != nil {

@@ -193,6 +193,55 @@ paths:
         '202': { description: Scope reconciliation queued. }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /accounts/import/emclient:
+    post:
+      operationId: parseEmclientImport
+      tags: [accounts]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                masterPassword:
+                  type: string
+      responses:
+        '200':
+          description: Parsed account candidates. Credentials stay on the server.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmclientImportPreview' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413': { description: Upload exceeds the size limit. }
+  /accounts/import/emclient/{importId}:
+    parameters:
+      - name: importId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      operationId: applyEmclientImport
+      tags: [accounts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EmclientImportRequest' }
+      responses:
+        '200':
+          description: Import result.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmclientImportResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /accounts/discover:
     post:
       operationId: discoverAccount
@@ -1299,6 +1348,53 @@ components:
         pop3: { $ref: '#/components/schemas/DiscoveryEndpoint' }
         smtp: { $ref: '#/components/schemas/DiscoveryEndpoint' }
       required: [domain, provider, source, receiveProtocol]
+    EmclientImportAccount:
+      type: object
+      properties:
+        email: { type: string }
+        receiveProtocol: { type: string, enum: [imap, pop3] }
+        imapAddr: { type: string }
+        pop3Addr: { type: string }
+        smtpAddr: { type: string }
+        authType: { type: string, enum: [password, oauth2] }
+        importable: { type: boolean }
+        selected: { type: boolean }
+        reason: { type: string }
+      required: [email, receiveProtocol, authType, importable, selected]
+    EmclientImportPreview:
+      type: object
+      properties:
+        importId: { type: string, format: uuid }
+        accounts:
+          type: array
+          items: { $ref: '#/components/schemas/EmclientImportAccount' }
+      required: [importId, accounts]
+    EmclientImportRequest:
+      type: object
+      properties:
+        emails:
+          type: array
+          items: { type: string }
+      required: [emails]
+    EmclientImportFailure:
+      type: object
+      properties:
+        email: { type: string }
+        error: { type: string }
+      required: [email, error]
+    EmclientImportResult:
+      type: object
+      properties:
+        created:
+          type: array
+          items: { type: string }
+        skipped:
+          type: array
+          items: { type: string }
+        failed:
+          type: array
+          items: { $ref: '#/components/schemas/EmclientImportFailure' }
+      required: [created, skipped, failed]
     ConnectionTestResult:
       type: object
       properties:
@@ -1668,12 +1764,11 @@ components:
     ConcurrencySettings:
       type: object
       properties:
-        mode: { type: string, enum: [auto, manual] }
         syncConcurrency: { type: integer }
         fetchConcurrency: { type: integer }
         searchConcurrency: { type: integer }
         indexBatchSize: { type: integer }
-      required: [mode, syncConcurrency, fetchConcurrency, searchConcurrency, indexBatchSize]
+      required: [syncConcurrency, fetchConcurrency, searchConcurrency, indexBatchSize]
     ResourceInfo:
       type: object
       properties:
@@ -1682,9 +1777,7 @@ components:
         memoryBytes: { type: integer }
         cpuSource: { type: string }
         memorySource: { type: string }
-        auto: { $ref: '#/components/schemas/ConcurrencySettings' }
-        effective: { $ref: '#/components/schemas/ConcurrencySettings' }
-      required: [cgroupVersion, cpus, memoryBytes, cpuSource, memorySource, auto, effective]
+      required: [cgroupVersion, cpus, memoryBytes, cpuSource, memorySource]
     Settings:
       type: object
       properties:
@@ -1706,6 +1799,7 @@ components:
         googleFaviconAvatars: { type: boolean }
         timezone: { type: string }
         language: { type: string, enum: [en, zh-CN] }
+        envelopeBatchSize: { type: integer }
         concurrency: { $ref: '#/components/schemas/ConcurrencySettings' }
         resources: { $ref: '#/components/schemas/ResourceInfo' }
         sessionTtlHours: { type: integer }
@@ -1718,7 +1812,7 @@ components:
         googleSecretSet: { type: boolean }
         microsoftSecretSet: { type: boolean }
         logLevel: { type: string, enum: [debug, info, warn, error] }
-      required: [defaultInitialSyncRange, defaultDownloadScope, preserveMarkedOnAccountDelete, sentSyncMode, draftSyncMode, draftPullIntervalSeconds, draftPushDelaySeconds, composeWindowMode, sendRetryLimit, deleteMode, deleteQueueDays, signaturePosition, networkAvatars, gravatarAvatars, bimiAvatars, googleFaviconAvatars, timezone, language, concurrency, resources, sessionTtlHours, syncIntervalSeconds, pop3IntervalSeconds, bodyPrefetchMaxBytes, maxAttachmentBytes, googleClientId, microsoftClientId, googleSecretSet, microsoftSecretSet]
+      required: [defaultInitialSyncRange, defaultDownloadScope, preserveMarkedOnAccountDelete, sentSyncMode, draftSyncMode, draftPullIntervalSeconds, draftPushDelaySeconds, composeWindowMode, sendRetryLimit, deleteMode, deleteQueueDays, signaturePosition, networkAvatars, gravatarAvatars, bimiAvatars, googleFaviconAvatars, timezone, language, envelopeBatchSize, concurrency, resources, sessionTtlHours, syncIntervalSeconds, pop3IntervalSeconds, bodyPrefetchMaxBytes, maxAttachmentBytes, googleClientId, microsoftClientId, googleSecretSet, microsoftSecretSet]
     SettingsUpdate:
       type: object
       properties:
@@ -1740,11 +1834,9 @@ components:
         googleFaviconAvatars: { type: boolean }
         timezone: { type: string }
         language: { type: string, enum: [en, zh-CN] }
-        concurrencyMode: { type: string, enum: [auto, manual] }
         syncConcurrency: { type: integer, minimum: 1, maximum: 32 }
         fetchConcurrency: { type: integer, minimum: 1, maximum: 32 }
-        searchConcurrency: { type: integer, minimum: 1, maximum: 32 }
-        indexBatchSize: { type: integer, minimum: 50, maximum: 500 }
+        envelopeBatchSize: { type: integer, minimum: 1, maximum: 200 }
         sessionTtlHours: { type: integer, minimum: 1, maximum: 8760 }
         syncIntervalSeconds: { type: integer, minimum: 30, maximum: 86400 }
         pop3IntervalSeconds: { type: integer, minimum: 30, maximum: 86400 }

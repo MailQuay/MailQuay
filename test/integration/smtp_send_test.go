@@ -26,6 +26,7 @@ import (
 	"github.com/mailquay/mailquay/internal/events"
 	"github.com/mailquay/mailquay/internal/identity"
 	"github.com/mailquay/mailquay/internal/mailbox"
+	"github.com/mailquay/mailquay/internal/mailsession"
 	"github.com/mailquay/mailquay/internal/message"
 	"github.com/mailquay/mailquay/internal/platform"
 	"github.com/mailquay/mailquay/internal/settings"
@@ -139,7 +140,7 @@ func TestOutboxSendsSMTPAndMarksDraft(t *testing.T) {
 	ids := identity.NewService(st)
 	_ = mailbox.NewService(st)
 	messages := message.NewService(st, hub, blobs, logger)
-	composer := compose.NewService(st, accounts, ids, settingsSvc, messages, blobs, hub, logger, nil)
+	composer := compose.NewService(st, accounts, ids, settingsSvc, messages, blobs, hub, logger, nil, mailsession.NewPool(time.Minute))
 
 	acct, err := accounts.Create(ctx, account.Input{
 		Name: "Alice", Email: "alice@example.com", Username: "alice", AuthType: "password",

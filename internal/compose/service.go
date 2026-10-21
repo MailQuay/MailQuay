@@ -19,6 +19,7 @@ import (
 	"github.com/mailquay/mailquay/internal/events"
 	"github.com/mailquay/mailquay/internal/identity"
 	"github.com/mailquay/mailquay/internal/imapclient"
+	"github.com/mailquay/mailquay/internal/mailsession"
 	"github.com/mailquay/mailquay/internal/message"
 	"github.com/mailquay/mailquay/internal/netpace"
 	"github.com/mailquay/mailquay/internal/platform"
@@ -88,17 +89,18 @@ type Service struct {
 	hub        *events.Hub
 	logger     *slog.Logger
 	pacer      *netpace.Pacer
+	sessions   *mailsession.Pool
 	trigger    chan uuid.UUID
 }
 
 // NewService builds the compose service.
 func NewService(st *store.Store, accounts *account.Service, identities *identity.Service,
 	settingsSvc *settings.Service, messages *message.Service, blobs *storage.Store,
-	hub *events.Hub, logger *slog.Logger, pacer *netpace.Pacer) *Service {
+	hub *events.Hub, logger *slog.Logger, pacer *netpace.Pacer, sessions *mailsession.Pool) *Service {
 	return &Service{
 		store: st, accounts: accounts, identities: identities, settings: settingsSvc,
 		messages: messages, blobs: blobs, hub: hub, logger: logger, pacer: pacer,
-		trigger: make(chan uuid.UUID, 32),
+		sessions: sessions, trigger: make(chan uuid.UUID, 32),
 	}
 }
 
@@ -108,6 +110,20 @@ func (s *Service) dialIMAP(ctx context.Context, cfg imapclient.Config) (*imapcli
 		return nil, err
 	}
 	return imapclient.Dial(ctx, cfg)
+}
+
+// imapDialer returns the background dialer for an account session.
+func (s *Service) imapDialer(acct sqlcgen.Account, creds account.Credentials) mailsession.DialFunc {
+	cfg := imapclient.Config{
+		Address: deref(acct.ImapAddr), Security: acct.ImapSecurity, Username: acct.Username,
+		Password: creds.Password, AccessToken: creds.AccessToken, Timeout: 30 * time.Second,
+	}
+	return func(ctx context.Context, interactive bool) (*imapclient.Client, error) {
+		if interactive {
+			return imapclient.Dial(ctx, cfg)
+		}
+		return s.dialIMAP(ctx, cfg)
+	}
 }
 
 // List returns drafts ordered by update time.

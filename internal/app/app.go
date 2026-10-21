@@ -24,6 +24,7 @@ import (
 	"github.com/mailquay/mailquay/internal/httpapi"
 	"github.com/mailquay/mailquay/internal/identity"
 	"github.com/mailquay/mailquay/internal/mailbox"
+	"github.com/mailquay/mailquay/internal/mailsession"
 	"github.com/mailquay/mailquay/internal/message"
 	"github.com/mailquay/mailquay/internal/netpace"
 	"github.com/mailquay/mailquay/internal/platform"
@@ -40,6 +41,10 @@ import (
 // paced by the remote endpoint instead of local concurrency alone.
 const dialInterval = 2 * time.Second
 
+// sessionIdleTimeout closes an account's idle IMAP connection so it does not
+// hold a server slot between syncs.
+const sessionIdleTimeout = 3 * time.Minute
+
 // App is the assembled server process.
 type App struct {
 	cfg       *config.Config
@@ -51,6 +56,7 @@ type App struct {
 	settings  *settings.Service
 	sync      *syncservice.Service
 	compose   *compose.Service
+	sessions  *mailsession.Pool
 	messages  *message.Service
 	accounts  *account.Service
 	server    *http.Server
@@ -97,19 +103,19 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 		st.Close()
 		return nil, err
 	}
-	logger.Info("concurrency", "mode", snap.Effective.Mode, "sync", snap.Effective.SyncConcurrency,
-		"fetch", snap.Effective.FetchConcurrency, "search", snap.Effective.SearchConcurrency,
-		"index_batch", snap.Effective.IndexBatchSize)
+	logger.Info("concurrency", "sync", snap.Effective.SyncConcurrency, "fetch", snap.Effective.FetchConcurrency,
+		"search", snap.Effective.SearchConcurrency, "index_batch", snap.Effective.IndexBatchSize)
 
 	hub := events.NewHub()
 	pacer := netpace.New(dialInterval)
+	sessions := mailsession.NewPool(sessionIdleTimeout)
 	accounts := account.NewService(st, cipher, logger)
 	accounts.SetSettings(settingsSvc)
 	ids := identity.NewService(st)
 	mailboxes := mailbox.NewService(st)
 	messages := message.NewService(st, hub, blobs, logger)
-	composeSvc := compose.NewService(st, accounts, ids, settingsSvc, messages, blobs, hub, logger, pacer)
-	syncSvc := syncservice.NewService(st, cfg, logger, hub, blobs, accounts, mailboxes, messages, settingsSvc, pacer)
+	composeSvc := compose.NewService(st, accounts, ids, settingsSvc, messages, blobs, hub, logger, pacer, sessions)
+	syncSvc := syncservice.NewService(st, cfg, logger, hub, blobs, accounts, mailboxes, messages, settingsSvc, pacer, sessions)
 
 	indexer := NewIndexer(st, index, blobs, hub, logger)
 	mappingKey := "search_mapping_version"
@@ -134,6 +140,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	accounts.OnCreated = func(ctx context.Context, accountID uuid.UUID) { syncSvc.TriggerAccount(accountID) }
 	accounts.OnScope = func(ctx context.Context, accountID uuid.UUID) { syncSvc.ReconcileScope(ctx, accountID) }
 	accounts.OnDeleted = func(ctx context.Context, accountID uuid.UUID) {
+		syncSvc.ForgetAccount(accountID)
 		go purgeAccount(ctx, st, index, hub, settingsSvc, accountID, logger)
 	}
 	messages.AttachmentLimit = settingsSvc.MaxAttachmentBytes
@@ -247,6 +254,7 @@ func (a *App) cleanupLoop(ctx context.Context) {
 func (a *App) Close() {
 	a.closeOnce.Do(func() {
 		a.sync.Stop()
+		a.sessions.Close()
 		if a.index != nil {
 			_ = a.index.Close()
 		}

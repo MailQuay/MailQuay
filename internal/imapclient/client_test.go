@@ -2,8 +2,7 @@ package imapclient
 
 import (
 	"testing"
-
-	"github.com/emersion/go-imap/v2"
+	"time"
 )
 
 func TestValidateAddress(t *testing.T) {
@@ -162,24 +161,57 @@ func TestFolderName(t *testing.T) {
 	}
 }
 
-func TestConvertAddresses(t *testing.T) {
-	if got := convertAddresses(nil); got != nil {
-		t.Fatalf("convertAddresses(nil) = %v, want nil", got)
+func TestApplyHeaders(t *testing.T) {
+	raw := []byte("From: =?utf-8?b?5aSc6L276YWx?= <alice@example.com>\r\n" +
+		"To: bob@example.com,\r\n Carol <carol@example.com>\r\n" +
+		"Subject: =?utf-8?q?hello_=E4=BD=A0=E5=A5=BD?=\r\n" +
+		"Message-ID: <abc@example.com>\r\n" +
+		"In-Reply-To: <parent@example.com>\r\n" +
+		"References: <one@example.com>\r\n\t<two@example.com>\r\n" +
+		"Date: Mon, 20 Oct 2025 10:00:00 +0000\r\n" +
+		"\r\n")
+	var env Envelope
+	applyHeaders(&env, raw)
+	if env.MessageID != "<abc@example.com>" {
+		t.Fatalf("MessageID = %q", env.MessageID)
 	}
-	in := []imap.Address{
-		{Name: "Alice", Mailbox: "alice", Host: "example.com"},
-		{Mailbox: "bob@example.com"},
-		{},
+	if env.InReplyTo != "<parent@example.com>" {
+		t.Fatalf("InReplyTo = %q", env.InReplyTo)
 	}
-	got := convertAddresses(in)
-	if len(got) != 2 {
-		t.Fatalf("convertAddresses() = %v, want 2 entries", got)
+	if env.Subject != "hello 你好" {
+		t.Fatalf("Subject = %q", env.Subject)
 	}
-	if got[0].Name != "Alice" || got[0].Email != "alice@example.com" {
-		t.Fatalf("unexpected first address: %+v", got[0])
+	if len(env.From) != 1 || env.From[0].Name != "夜轻酱" || env.From[0].Email != "alice@example.com" {
+		t.Fatalf("From = %+v", env.From)
 	}
-	if got[1].Email != "bob@example.com" {
-		t.Fatalf("unexpected second address: %+v", got[1])
+	if len(env.To) != 2 || env.To[1].Name != "Carol" || env.To[1].Email != "carol@example.com" {
+		t.Fatalf("To = %+v", env.To)
+	}
+	if len(env.References) != 2 || env.References[0] != "one@example.com" || env.References[1] != "two@example.com" {
+		t.Fatalf("References = %v", env.References)
+	}
+	if env.SentAt.UTC().Format(time.RFC3339) != "2025-10-20T10:00:00Z" {
+		t.Fatalf("SentAt = %v", env.SentAt)
+	}
+}
+
+func TestApplyHeadersToleratesGarbage(t *testing.T) {
+	raw := []byte("From: not an address <>\r\n" +
+		"To: broken ,, bob@example.com\r\n" +
+		"Subject: plain\r\n" +
+		"Date: not a date\r\n" +
+		"nonsense line\r\n" +
+		"\r\n")
+	var env Envelope
+	applyHeaders(&env, raw)
+	if env.Subject != "plain" {
+		t.Fatalf("Subject = %q", env.Subject)
+	}
+	if len(env.To) != 1 || env.To[0].Email != "bob@example.com" {
+		t.Fatalf("To = %+v", env.To)
+	}
+	if !env.SentAt.IsZero() {
+		t.Fatalf("SentAt = %v, want zero", env.SentAt)
 	}
 }
 

@@ -152,12 +152,6 @@ const (
 	BatchRequestActionUnread  BatchRequestAction = "unread"
 )
 
-// Defines values for ConcurrencySettingsMode.
-const (
-	ConcurrencySettingsModeAuto   ConcurrencySettingsMode = "auto"
-	ConcurrencySettingsModeManual ConcurrencySettingsMode = "manual"
-)
-
 // Defines values for DiscoveryEndpointSecurity.
 const (
 	DiscoveryEndpointSecurityImplicitTls DiscoveryEndpointSecurity = "implicit_tls"
@@ -173,8 +167,8 @@ const (
 
 // Defines values for DiscoveryResultReceiveProtocol.
 const (
-	Imap DiscoveryResultReceiveProtocol = "imap"
-	Pop3 DiscoveryResultReceiveProtocol = "pop3"
+	DiscoveryResultReceiveProtocolImap DiscoveryResultReceiveProtocol = "imap"
+	DiscoveryResultReceiveProtocolPop3 DiscoveryResultReceiveProtocol = "pop3"
 )
 
 // Defines values for DiscoveryResultSource.
@@ -193,6 +187,18 @@ const (
 	DraftStatusFailed     DraftStatus = "failed"
 	DraftStatusSending    DraftStatus = "sending"
 	DraftStatusSent       DraftStatus = "sent"
+)
+
+// Defines values for EmclientImportAccountAuthType.
+const (
+	Oauth2   EmclientImportAccountAuthType = "oauth2"
+	Password EmclientImportAccountAuthType = "password"
+)
+
+// Defines values for EmclientImportAccountReceiveProtocol.
+const (
+	EmclientImportAccountReceiveProtocolImap EmclientImportAccountReceiveProtocol = "imap"
+	EmclientImportAccountReceiveProtocolPop3 EmclientImportAccountReceiveProtocol = "pop3"
 )
 
 // Defines values for IdentitySignatureMode.
@@ -315,12 +321,6 @@ const (
 const (
 	SettingsUpdateComposeWindowModeInApp     SettingsUpdateComposeWindowMode = "in_app"
 	SettingsUpdateComposeWindowModeNewWindow SettingsUpdateComposeWindowMode = "new_window"
-)
-
-// Defines values for SettingsUpdateConcurrencyMode.
-const (
-	SettingsUpdateConcurrencyModeAuto   SettingsUpdateConcurrencyMode = "auto"
-	SettingsUpdateConcurrencyModeManual SettingsUpdateConcurrencyMode = "manual"
 )
 
 // Defines values for SettingsUpdateDefaultDownloadScope.
@@ -617,15 +617,11 @@ type ChangePasswordRequest struct {
 
 // ConcurrencySettings defines model for ConcurrencySettings.
 type ConcurrencySettings struct {
-	FetchConcurrency  int                     `json:"fetchConcurrency"`
-	IndexBatchSize    int                     `json:"indexBatchSize"`
-	Mode              ConcurrencySettingsMode `json:"mode"`
-	SearchConcurrency int                     `json:"searchConcurrency"`
-	SyncConcurrency   int                     `json:"syncConcurrency"`
+	FetchConcurrency  int `json:"fetchConcurrency"`
+	IndexBatchSize    int `json:"indexBatchSize"`
+	SearchConcurrency int `json:"searchConcurrency"`
+	SyncConcurrency   int `json:"syncConcurrency"`
 }
-
-// ConcurrencySettingsMode defines model for ConcurrencySettings.Mode.
-type ConcurrencySettingsMode string
 
 // ConnectionTestResult defines model for ConnectionTestResult.
 type ConnectionTestResult struct {
@@ -732,6 +728,49 @@ type DraftUpdateRequest struct {
 	Revision          int                   `json:"revision"`
 	Subject           string                `json:"subject"`
 	To                *[]string             `json:"to,omitempty"`
+}
+
+// EmclientImportAccount defines model for EmclientImportAccount.
+type EmclientImportAccount struct {
+	AuthType        EmclientImportAccountAuthType        `json:"authType"`
+	Email           string                               `json:"email"`
+	ImapAddr        *string                              `json:"imapAddr,omitempty"`
+	Importable      bool                                 `json:"importable"`
+	Pop3Addr        *string                              `json:"pop3Addr,omitempty"`
+	Reason          *string                              `json:"reason,omitempty"`
+	ReceiveProtocol EmclientImportAccountReceiveProtocol `json:"receiveProtocol"`
+	Selected        bool                                 `json:"selected"`
+	SmtpAddr        *string                              `json:"smtpAddr,omitempty"`
+}
+
+// EmclientImportAccountAuthType defines model for EmclientImportAccount.AuthType.
+type EmclientImportAccountAuthType string
+
+// EmclientImportAccountReceiveProtocol defines model for EmclientImportAccount.ReceiveProtocol.
+type EmclientImportAccountReceiveProtocol string
+
+// EmclientImportFailure defines model for EmclientImportFailure.
+type EmclientImportFailure struct {
+	Email string `json:"email"`
+	Error string `json:"error"`
+}
+
+// EmclientImportPreview defines model for EmclientImportPreview.
+type EmclientImportPreview struct {
+	Accounts []EmclientImportAccount `json:"accounts"`
+	ImportId openapi_types.UUID      `json:"importId"`
+}
+
+// EmclientImportRequest defines model for EmclientImportRequest.
+type EmclientImportRequest struct {
+	Emails []string `json:"emails"`
+}
+
+// EmclientImportResult defines model for EmclientImportResult.
+type EmclientImportResult struct {
+	Created []string                `json:"created"`
+	Failed  []EmclientImportFailure `json:"failed"`
+	Skipped []string                `json:"skipped"`
 }
 
 // ErrorResponse defines model for ErrorResponse.
@@ -941,13 +980,11 @@ type RescheduleRequest struct {
 
 // ResourceInfo defines model for ResourceInfo.
 type ResourceInfo struct {
-	Auto          ConcurrencySettings `json:"auto"`
-	CgroupVersion int                 `json:"cgroupVersion"`
-	CpuSource     string              `json:"cpuSource"`
-	Cpus          int                 `json:"cpus"`
-	Effective     ConcurrencySettings `json:"effective"`
-	MemoryBytes   int                 `json:"memoryBytes"`
-	MemorySource  string              `json:"memorySource"`
+	CgroupVersion int    `json:"cgroupVersion"`
+	CpuSource     string `json:"cpuSource"`
+	Cpus          int    `json:"cpus"`
+	MemoryBytes   int    `json:"memoryBytes"`
+	MemorySource  string `json:"memorySource"`
 }
 
 // SecurityInfo defines model for SecurityInfo.
@@ -978,6 +1015,7 @@ type Settings struct {
 	DraftPullIntervalSeconds      int                             `json:"draftPullIntervalSeconds"`
 	DraftPushDelaySeconds         int                             `json:"draftPushDelaySeconds"`
 	DraftSyncMode                 SettingsDraftSyncMode           `json:"draftSyncMode"`
+	EnvelopeBatchSize             int                             `json:"envelopeBatchSize"`
 	GoogleClientId                string                          `json:"googleClientId"`
 	GoogleFaviconAvatars          bool                            `json:"googleFaviconAvatars"`
 	GoogleSecretSet               bool                            `json:"googleSecretSet"`
@@ -1031,7 +1069,6 @@ type SettingsUpdate struct {
 	BimiAvatars                   *bool                                  `json:"bimiAvatars,omitempty"`
 	BodyPrefetchMaxBytes          *int                                   `json:"bodyPrefetchMaxBytes,omitempty"`
 	ComposeWindowMode             *SettingsUpdateComposeWindowMode       `json:"composeWindowMode,omitempty"`
-	ConcurrencyMode               *SettingsUpdateConcurrencyMode         `json:"concurrencyMode,omitempty"`
 	DefaultDownloadScope          *SettingsUpdateDefaultDownloadScope    `json:"defaultDownloadScope,omitempty"`
 	DefaultInitialSyncRange       *SettingsUpdateDefaultInitialSyncRange `json:"defaultInitialSyncRange,omitempty"`
 	DeleteMode                    *SettingsUpdateDeleteMode              `json:"deleteMode,omitempty"`
@@ -1039,12 +1076,12 @@ type SettingsUpdate struct {
 	DraftPullIntervalSeconds      *int                                   `json:"draftPullIntervalSeconds,omitempty"`
 	DraftPushDelaySeconds         *int                                   `json:"draftPushDelaySeconds,omitempty"`
 	DraftSyncMode                 *SettingsUpdateDraftSyncMode           `json:"draftSyncMode,omitempty"`
+	EnvelopeBatchSize             *int                                   `json:"envelopeBatchSize,omitempty"`
 	FetchConcurrency              *int                                   `json:"fetchConcurrency,omitempty"`
 	GoogleClientId                *string                                `json:"googleClientId,omitempty"`
 	GoogleClientSecret            *string                                `json:"googleClientSecret,omitempty"`
 	GoogleFaviconAvatars          *bool                                  `json:"googleFaviconAvatars,omitempty"`
 	GravatarAvatars               *bool                                  `json:"gravatarAvatars,omitempty"`
-	IndexBatchSize                *int                                   `json:"indexBatchSize,omitempty"`
 	Language                      *SettingsUpdateLanguage                `json:"language,omitempty"`
 	LogLevel                      *SettingsUpdateLogLevel                `json:"logLevel,omitempty"`
 	MaxAttachmentBytes            *int                                   `json:"maxAttachmentBytes,omitempty"`
@@ -1053,7 +1090,6 @@ type SettingsUpdate struct {
 	NetworkAvatars                *bool                                  `json:"networkAvatars,omitempty"`
 	Pop3IntervalSeconds           *int                                   `json:"pop3IntervalSeconds,omitempty"`
 	PreserveMarkedOnAccountDelete *bool                                  `json:"preserveMarkedOnAccountDelete,omitempty"`
-	SearchConcurrency             *int                                   `json:"searchConcurrency,omitempty"`
 	SendRetryLimit                *int                                   `json:"sendRetryLimit,omitempty"`
 	SentSyncMode                  *SettingsUpdateSentSyncMode            `json:"sentSyncMode,omitempty"`
 	SessionTtlHours               *int                                   `json:"sessionTtlHours,omitempty"`
@@ -1065,9 +1101,6 @@ type SettingsUpdate struct {
 
 // SettingsUpdateComposeWindowMode defines model for SettingsUpdate.ComposeWindowMode.
 type SettingsUpdateComposeWindowMode string
-
-// SettingsUpdateConcurrencyMode defines model for SettingsUpdate.ConcurrencyMode.
-type SettingsUpdateConcurrencyMode string
 
 // SettingsUpdateDefaultDownloadScope defines model for SettingsUpdate.DefaultDownloadScope.
 type SettingsUpdateDefaultDownloadScope string
@@ -1182,6 +1215,12 @@ type TooManyRequests = ErrorResponse
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = ErrorResponse
 
+// ParseEmclientImportMultipartBody defines parameters for ParseEmclientImport.
+type ParseEmclientImportMultipartBody struct {
+	File           openapi_types.File `json:"file"`
+	MasterPassword *string            `json:"masterPassword,omitempty"`
+}
+
 // ListArchivesParams defines parameters for ListArchives.
 type ListArchivesParams struct {
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
@@ -1258,6 +1297,12 @@ type CreateAccountJSONRequestBody = AccountInput
 // DiscoverAccountJSONRequestBody defines body for DiscoverAccount for application/json ContentType.
 type DiscoverAccountJSONRequestBody = DiscoveryRequest
 
+// ParseEmclientImportMultipartRequestBody defines body for ParseEmclientImport for multipart/form-data ContentType.
+type ParseEmclientImportMultipartRequestBody ParseEmclientImportMultipartBody
+
+// ApplyEmclientImportJSONRequestBody defines body for ApplyEmclientImport for application/json ContentType.
+type ApplyEmclientImportJSONRequestBody = EmclientImportRequest
+
 // UpdateAccountJSONRequestBody defines body for UpdateAccount for application/json ContentType.
 type UpdateAccountJSONRequestBody = AccountInput
 
@@ -1317,6 +1362,12 @@ type ServerInterface interface {
 
 	// (POST /accounts/discover)
 	DiscoverAccount(w http.ResponseWriter, r *http.Request)
+
+	// (POST /accounts/import/emclient)
+	ParseEmclientImport(w http.ResponseWriter, r *http.Request)
+
+	// (POST /accounts/import/emclient/{importId})
+	ApplyEmclientImport(w http.ResponseWriter, r *http.Request, importId openapi_types.UUID)
 
 	// (DELETE /accounts/{id})
 	DeleteAccount(w http.ResponseWriter, r *http.Request, id AccountID)
@@ -1515,6 +1566,16 @@ func (_ Unimplemented) CreateAccount(w http.ResponseWriter, r *http.Request) {
 
 // (POST /accounts/discover)
 func (_ Unimplemented) DiscoverAccount(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /accounts/import/emclient)
+func (_ Unimplemented) ParseEmclientImport(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /accounts/import/emclient/{importId})
+func (_ Unimplemented) ApplyEmclientImport(w http.ResponseWriter, r *http.Request, importId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1860,6 +1921,45 @@ func (siw *ServerInterfaceWrapper) DiscoverAccount(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DiscoverAccount(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ParseEmclientImport operation middleware
+func (siw *ServerInterfaceWrapper) ParseEmclientImport(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ParseEmclientImport(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ApplyEmclientImport operation middleware
+func (siw *ServerInterfaceWrapper) ApplyEmclientImport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "importId" -------------
+	var importId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "importId", chi.URLParam(r, "importId"), &importId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "importId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ApplyEmclientImport(w, r, importId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3554,6 +3654,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/accounts/discover", wrapper.DiscoverAccount)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/accounts/import/emclient", wrapper.ParseEmclientImport)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/accounts/import/emclient/{importId}", wrapper.ApplyEmclientImport)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/accounts/{id}", wrapper.DeleteAccount)

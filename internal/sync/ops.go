@@ -9,9 +9,15 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/mailquay/mailquay/internal/imapclient"
+	"github.com/mailquay/mailquay/internal/mailsession"
 	"github.com/mailquay/mailquay/internal/platform"
 	"github.com/mailquay/mailquay/internal/store/sqlcgen"
 )
+
+// opsWait bounds how long the background ops loop waits for the account
+// session before it retries on the next tick.
+const opsWait = 2 * time.Second
 
 func (s *Service) opsWorker(ctx context.Context) {
 	defer s.wg.Done()
@@ -35,7 +41,7 @@ func (s *Service) processPendingOps(ctx context.Context) {
 	for _, acct := range accounts {
 		switch acct.ReceiveProtocol {
 		case "imap":
-			if err := s.processAccountOps(ctx, acct); err != nil {
+			if err := s.processAccountOps(ctx, acct); err != nil && !errors.Is(err, mailsession.ErrBusy) {
 				s.logger.Debug("process pending ops", "account", acct.ID, "error", err)
 			}
 		case "pop3":
@@ -55,11 +61,12 @@ func (s *Service) processAccountOps(ctx context.Context, acct sqlcgen.Account) e
 	if err != nil {
 		return err
 	}
-	client, err := s.dialIMAP(ctx, s.imapConfig(acct, creds))
-	if err != nil {
-		return err
-	}
-	defer client.Close()
+	return s.sessions.TryDo(ctx, acct.ID, opsWait, s.imapDialer(acct, creds), func(ctx context.Context, client *imapclient.Client) error {
+		return s.applyAccountOps(ctx, client, acct, ops)
+	})
+}
+
+func (s *Service) applyAccountOps(ctx context.Context, client *imapclient.Client, acct sqlcgen.Account, ops []sqlcgen.PendingOp) error {
 	selected := ""
 	for _, op := range ops {
 		if op.MailboxID == nil {
