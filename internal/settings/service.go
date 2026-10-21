@@ -39,6 +39,8 @@ type Values struct {
 	GoogleFaviconAvatars     bool   `json:"googleFaviconAvatars"`
 	Timezone                 string `json:"timezone"`
 	Language                 string `json:"language"`
+	RemoveReadImmediately    bool   `json:"removeReadImmediately"`
+	PrependNewMessages       bool   `json:"prependNewMessages"`
 	SyncConcurrency          int    `json:"syncConcurrency"`
 	FetchConcurrency         int    `json:"fetchConcurrency"`
 	SearchConcurrency        int    `json:"searchConcurrency"`
@@ -113,6 +115,8 @@ func Defaults() Values {
 		GoogleFaviconAvatars:     true,
 		Timezone:                 "UTC",
 		Language:                 "en",
+		RemoveReadImmediately:    false,
+		PrependNewMessages:       true,
 		SyncConcurrency:          2,
 		FetchConcurrency:         2,
 		SearchConcurrency:        1,
@@ -461,6 +465,10 @@ func decodeInto(key string, raw json.RawMessage, v *Values) error {
 		return json.Unmarshal(raw, &v.Timezone)
 	case "language":
 		return json.Unmarshal(raw, &v.Language)
+	case "remove_read_immediately":
+		return json.Unmarshal(raw, &v.RemoveReadImmediately)
+	case "prepend_new_messages":
+		return json.Unmarshal(raw, &v.PrependNewMessages)
 	case "sync_concurrency":
 		return json.Unmarshal(raw, &v.SyncConcurrency)
 	case "fetch_concurrency":
@@ -531,6 +539,10 @@ func setField(key string, raw json.RawMessage, v *Values) error {
 		return json.Unmarshal(raw, &v.Timezone)
 	case "language":
 		return json.Unmarshal(raw, &v.Language)
+	case "remove_read_immediately":
+		return json.Unmarshal(raw, &v.RemoveReadImmediately)
+	case "prepend_new_messages":
+		return json.Unmarshal(raw, &v.PrependNewMessages)
 	case "sync_concurrency":
 		return json.Unmarshal(raw, &v.SyncConcurrency)
 	case "fetch_concurrency":
@@ -601,6 +613,10 @@ func fieldValue(key string, v Values) (any, error) {
 		return v.Timezone, nil
 	case "language":
 		return v.Language, nil
+	case "remove_read_immediately":
+		return v.RemoveReadImmediately, nil
+	case "prepend_new_messages":
+		return v.PrependNewMessages, nil
 	case "sync_concurrency":
 		return v.SyncConcurrency, nil
 	case "fetch_concurrency":

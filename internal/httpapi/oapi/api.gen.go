@@ -1029,7 +1029,9 @@ type Settings struct {
 	MicrosoftSecretSet            bool                            `json:"microsoftSecretSet"`
 	NetworkAvatars                bool                            `json:"networkAvatars"`
 	Pop3IntervalSeconds           int                             `json:"pop3IntervalSeconds"`
+	PrependNewMessages            bool                            `json:"prependNewMessages"`
 	PreserveMarkedOnAccountDelete bool                            `json:"preserveMarkedOnAccountDelete"`
+	RemoveReadImmediately         bool                            `json:"removeReadImmediately"`
 	Resources                     ResourceInfo                    `json:"resources"`
 	SearchConcurrency             int                             `json:"searchConcurrency"`
 	SendRetryLimit                int                             `json:"sendRetryLimit"`
@@ -1094,7 +1096,9 @@ type SettingsUpdate struct {
 	MicrosoftClientSecret         *string                                `json:"microsoftClientSecret,omitempty"`
 	NetworkAvatars                *bool                                  `json:"networkAvatars,omitempty"`
 	Pop3IntervalSeconds           *int                                   `json:"pop3IntervalSeconds,omitempty"`
+	PrependNewMessages            *bool                                  `json:"prependNewMessages,omitempty"`
 	PreserveMarkedOnAccountDelete *bool                                  `json:"preserveMarkedOnAccountDelete,omitempty"`
+	RemoveReadImmediately         *bool                                  `json:"removeReadImmediately,omitempty"`
 	SearchConcurrency             *int                                   `json:"searchConcurrency,omitempty"`
 	SendRetryLimit                *int                                   `json:"sendRetryLimit,omitempty"`
 	SentSyncMode                  *SettingsUpdateSentSyncMode            `json:"sentSyncMode,omitempty"`
@@ -1254,6 +1258,8 @@ type ListDraftsParams struct {
 
 // StreamEventsParams defines parameters for StreamEvents.
 type StreamEventsParams struct {
+	// LastEventId Replay cursor used when a reconnect cannot send the Last-Event-ID header.
+	LastEventId *string `form:"lastEventId,omitempty" json:"lastEventId,omitempty"`
 	LastEventID *string `json:"Last-Event-ID,omitempty"`
 }
 
@@ -2747,6 +2753,14 @@ func (siw *ServerInterfaceWrapper) StreamEvents(w http.ResponseWriter, r *http.R
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params StreamEventsParams
+
+	// ------------- Optional query parameter "lastEventId" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "lastEventId", r.URL.Query(), &params.LastEventId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "lastEventId", Err: err})
+		return
+	}
 
 	headers := r.Header
 

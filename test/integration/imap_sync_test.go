@@ -163,6 +163,22 @@ func TestIMAPInitialSyncAndBodyFetch(t *testing.T) {
 	if count != 2 {
 		t.Fatalf("after second sync count = %d, want 2", count)
 	}
+	unread, _, err := messages.List(ctx, message.ListOptions{View: "unread", Limit: 50})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(unread) != 1 || unread[0].MessageIDHeader != "<two@example.com>" {
+		t.Fatalf("unified unread = %d messages %+v, want only <two@example.com>", len(unread), unread)
+	}
+	unreadInbox, _, err := messages.List(ctx, message.ListOptions{
+		View: "unread", MailboxID: &inbox.ID, Limit: 50,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(unreadInbox) != 1 || unreadInbox[0].MessageIDHeader != "<two@example.com>" {
+		t.Fatalf("mailbox unread = %d messages, want only <two@example.com>", len(unreadInbox))
+	}
 }
 
 func resetSchema(t *testing.T, ctx context.Context, dsn string) {

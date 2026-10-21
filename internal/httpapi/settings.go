@@ -71,6 +71,8 @@ func mapSettings(snap settings.Snapshot) oapi.Settings {
 		GoogleFaviconAvatars:          v.GoogleFaviconAvatars,
 		Timezone:                      v.Timezone,
 		Language:                      oapi.SettingsLanguage(v.Language),
+		RemoveReadImmediately:         v.RemoveReadImmediately,
+		PrependNewMessages:            v.PrependNewMessages,
 		EnvelopeBatchSize:             v.EnvelopeBatchSize,
 		SearchConcurrency:             v.SearchConcurrency,
 		IndexBatchSize:                v.IndexBatchSize,

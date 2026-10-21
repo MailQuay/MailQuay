@@ -36,8 +36,14 @@ func (s *Server) StreamEvents(w http.ResponseWriter, r *http.Request, params oap
 		return
 	}
 	var lastID uint64
+	rawLastID := ""
 	if params.LastEventID != nil {
-		if parsed, err := strconv.ParseUint(*params.LastEventID, 10, 64); err == nil {
+		rawLastID = *params.LastEventID
+	} else if params.LastEventId != nil {
+		rawLastID = *params.LastEventId
+	}
+	if rawLastID != "" {
+		if parsed, err := strconv.ParseUint(rawLastID, 10, 64); err == nil {
 			lastID = parsed
 		}
 	}

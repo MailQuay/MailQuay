@@ -1054,6 +1054,10 @@ paths:
         - name: Last-Event-ID
           in: header
           schema: { type: string }
+        - name: lastEventId
+          in: query
+          description: Replay cursor used when a reconnect cannot send the Last-Event-ID header.
+          schema: { type: string }
       responses:
         '200':
           description: Server-sent events.
@@ -1799,6 +1803,8 @@ components:
         googleFaviconAvatars: { type: boolean }
         timezone: { type: string }
         language: { type: string, enum: [en, zh-CN] }
+        removeReadImmediately: { type: boolean }
+        prependNewMessages: { type: boolean }
         envelopeBatchSize: { type: integer }
         searchConcurrency: { type: integer }
         indexBatchSize: { type: integer }
@@ -1815,7 +1821,7 @@ components:
         googleSecretSet: { type: boolean }
         microsoftSecretSet: { type: boolean }
         logLevel: { type: string, enum: [debug, info, warn, error] }
-      required: [defaultInitialSyncRange, defaultDownloadScope, preserveMarkedOnAccountDelete, sentSyncMode, draftSyncMode, draftPullIntervalSeconds, draftPushDelaySeconds, composeWindowMode, sendRetryLimit, deleteMode, deleteQueueDays, signaturePosition, networkAvatars, gravatarAvatars, bimiAvatars, googleFaviconAvatars, timezone, language, envelopeBatchSize, searchConcurrency, indexBatchSize, autoLocalConcurrency, concurrency, resources, sessionTtlHours, syncIntervalSeconds, pop3IntervalSeconds, bodyPrefetchMaxBytes, maxAttachmentBytes, googleClientId, microsoftClientId, googleSecretSet, microsoftSecretSet]
+      required: [defaultInitialSyncRange, defaultDownloadScope, preserveMarkedOnAccountDelete, sentSyncMode, draftSyncMode, draftPullIntervalSeconds, draftPushDelaySeconds, composeWindowMode, sendRetryLimit, deleteMode, deleteQueueDays, signaturePosition, networkAvatars, gravatarAvatars, bimiAvatars, googleFaviconAvatars, timezone, language, removeReadImmediately, prependNewMessages, envelopeBatchSize, searchConcurrency, indexBatchSize, autoLocalConcurrency, concurrency, resources, sessionTtlHours, syncIntervalSeconds, pop3IntervalSeconds, bodyPrefetchMaxBytes, maxAttachmentBytes, googleClientId, microsoftClientId, googleSecretSet, microsoftSecretSet]
     SettingsUpdate:
       type: object
       properties:
@@ -1837,6 +1843,8 @@ components:
         googleFaviconAvatars: { type: boolean }
         timezone: { type: string }
         language: { type: string, enum: [en, zh-CN] }
+        removeReadImmediately: { type: boolean }
+        prependNewMessages: { type: boolean }
         syncConcurrency: { type: integer, minimum: 1, maximum: 32 }
         fetchConcurrency: { type: integer, minimum: 1, maximum: 32 }
         envelopeBatchSize: { type: integer, minimum: 1, maximum: 200 }

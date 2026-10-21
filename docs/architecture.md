@@ -253,6 +253,13 @@ POP3 没有文件夹, 服务端标志和 IDLE. 兼容层不模拟不存在的语
 | 服务端搜索 | `SEARCH` | 无 |
 | 追加到 Sent | `APPEND` | 本地副本 |
 
+#### TLS 套件兼容
+
+- IMAP 建连使用 TLS 1.2 及以上, 证书按系统根证书校验, 不跳过校验.
+- 只有 `139.com` 和 `10086.cn` 的 IMAP 主机在 ECDHE 套件之外额外提供静态 RSA 套件 (`TLS_RSA_WITH_AES_128_GCM_SHA256`, `TLS_RSA_WITH_AES_256_GCM_SHA384`); 其他主机沿用 Go 默认套件列表.
+- 中国移动邮件网关在 ClientHello 未携带静态 RSA 套件时直接回 `handshake_failure`, 即使客户端同时提供了 ECDHE 套件; 该行为只出现在 IMAP 入口, 同一域名的 POP3 和 SMTP 入口不受影响.
+- 套件顺序保持 ECDHE 在前, 服务端支持前向保密时不会退化为静态 RSA.
+
 ### 4.3 发信
 
 ```mermaid
@@ -418,6 +425,7 @@ sequenceDiagram
 - 环境变量 `MAILQUAY_PUBLIC_URL` 和 `MAILQUAY_TRUSTED_PROXIES` 只作为首次启动的默认值, 数据库中存在同名字段后以数据库为准.
 - OAuth 客户端密钥使用主密钥加密后写入 `settings`, API 只返回是否已配置, 不回传明文.
 - 网络头像总开关和 Gravatar, BIMI, Google favicon 子开关保存在 `settings`; 后端在请求上游前检查, 关闭后不再发起对应外部请求, 不仅依赖前端隐藏.
+- `remove_read_immediately` 和 `prepend_new_messages` 是邮件列表展示偏好, 保存在 `settings`, 默认分别为关闭和开启; 只影响前端列表和阅读窗格, 不改变同步, 标记已读时机或远端状态.
 - BIMI 读取 `default._bimi` 的 `l=` SVG, 不校验证书; 仅允许 HTTPS 443 和非私有地址, 限制大小并拒绝脚本, 事件处理器和外部引用, 防止 SSRF 和脚本注入.
 - 修改后新任务和新请求立即使用新值; 正在运行的同步或发送任务继续使用旧值.
 

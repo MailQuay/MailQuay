@@ -373,7 +373,17 @@ func (s *Server) mapMessages(r *http.Request, rows []sqlcgen.Message) []oapi.Mes
 	return out
 }
 
-func (s *Server) enrichOne(r *http.Request, detail *oapi.MessageDetail) {}
+func (s *Server) enrichOne(r *http.Request, detail *oapi.MessageDetail) {
+	if acct, err := s.store.GetAccount(r.Context(), uuid.UUID(detail.AccountId)); err == nil {
+		detail.AccountEmail = &acct.Email
+		detail.AccountName = &acct.Name
+	}
+	if mb, err := s.store.GetMailbox(r.Context(), uuid.UUID(detail.MailboxId)); err == nil {
+		detail.MailboxPath = &mb.Path
+		role := string(mb.Role)
+		detail.MailboxRole = &role
+	}
+}
 
 func writeAttachment(w http.ResponseWriter, filename, contentType string, data []byte) {
 	if contentType == "" {

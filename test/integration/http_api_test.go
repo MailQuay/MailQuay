@@ -74,8 +74,12 @@ func TestHTTPAuthAndAccountFlow(t *testing.T) {
 	if settings["sendRetryLimit"] != float64(3) {
 		t.Fatalf("default retry limit = %v", settings["sendRetryLimit"])
 	}
+	if settings["removeReadImmediately"] != false || settings["prependNewMessages"] != true {
+		t.Fatalf("list defaults = remove %v prepend %v", settings["removeReadImmediately"], settings["prependNewMessages"])
+	}
 	resp = sendJSON(t, client, http.MethodPatch, base+"/settings", map[string]any{
 		"sendRetryLimit": 5, "language": "zh-CN",
+		"removeReadImmediately": true, "prependNewMessages": false,
 	}, csrf)
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
@@ -85,6 +89,9 @@ func TestHTTPAuthAndAccountFlow(t *testing.T) {
 	settings = getJSON(t, client, base+"/settings")
 	if settings["sendRetryLimit"] != float64(5) || settings["language"] != "zh-CN" {
 		t.Fatalf("settings not persisted: %+v", settings)
+	}
+	if settings["removeReadImmediately"] != true || settings["prependNewMessages"] != false {
+		t.Fatalf("list settings not persisted: %+v", settings)
 	}
 	resp = sendJSON(t, client, http.MethodPatch, base+"/settings", map[string]any{
 		"sessionTtlHours":     72,

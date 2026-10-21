@@ -115,17 +115,6 @@ func (s *Service) List(ctx context.Context, opts ListOptions) ([]sqlcgen.Message
 			break
 		}
 		fallthrough
-	case "sent", "trash":
-		rows, err := s.store.ListMessagesByRole(ctx, sqlcgen.ListMessagesByRoleParams{
-			Role: opts.View, AccountID: opts.AccountID, CursorReceived: cursorReceived,
-			CursorID: cursorID, PageLimit: limit,
-		})
-		if err != nil {
-			return nil, "", fmt.Errorf("list %s messages: %w", opts.View, err)
-		}
-		for _, row := range rows {
-			items = append(items, messageFromRoleRow(row))
-		}
 	case "all", "marked":
 		marked := opts.View == "marked"
 		params := sqlcgen.ListUnifiedMessagesParams{
@@ -147,6 +136,17 @@ func (s *Service) List(ctx context.Context, opts ListOptions) ([]sqlcgen.Message
 		}
 		for _, row := range rows {
 			items = append(items, messageFromUnified(row))
+		}
+	case "sent", "trash":
+		rows, err := s.store.ListMessagesByRole(ctx, sqlcgen.ListMessagesByRoleParams{
+			Role: opts.View, AccountID: opts.AccountID, CursorReceived: cursorReceived,
+			CursorID: cursorID, PageLimit: limit,
+		})
+		if err != nil {
+			return nil, "", fmt.Errorf("list %s messages: %w", opts.View, err)
+		}
+		for _, row := range rows {
+			items = append(items, messageFromRoleRow(row))
 		}
 	default:
 		return nil, "", fmt.Errorf("unknown view %q", opts.View)
