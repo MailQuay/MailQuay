@@ -308,7 +308,7 @@ frontend/
 - 失败任务进入任务环, 用红色弧段表示, 不单独放通知铃铛.
 - 登录用户头像悬停展开卡片, 显示头像, 名称, 邮箱, 设置入口和退出; 这是登录用户, 不是邮箱账号.
 - 邮箱账号筛选在侧边栏顶部, 负责切换全部账号或单个邮箱账号.
-- 回复, 转发, 标记, 本地归档, 删除只放在阅读器顶部, 不放在内容区顶栏; 全部回复放在回复菜单.
+- 阅读器顶部左侧是回复和转发, 右侧是标记, 本地归档和删除, 全部为图标按钮, 不放在内容区顶栏.
 - 顶栏不参与列表滚动, 使用 `sticky top-0`, 半透明背景和底部边框.
 - 移动端顶栏保留菜单按钮, 写邮件, 搜索, 任务环和头像; 次要按钮收进更多菜单.
 
@@ -401,7 +401,7 @@ frontend/
 - 定时发送打开日期时间选择器, 按用户时区选择, 提交时转换为 UTC 写入 `scheduled_at`.
 - 定时发送的草稿在到期前保持 `scheduled`; 编辑草稿会取消定时并回到编辑状态.
 - 身份弹层宽度约 `320px`, 顶部搜索, 列表显示 `显示名 <邮箱>`, 按邮箱账号分组; 允许选择任何账号的身份.
-- 回复, 全部回复和转发默认选择原邮件所属邮箱账号的默认身份; 新建邮件默认使用当前选中账号的默认身份.
+- 回复和转发默认选择原邮件所属邮箱账号的默认身份; 新建邮件默认使用当前选中账号的默认身份.
 - 原邮件所属账号已删除时, 回退到当前账号默认身份, 并提示这是本地保留副本.
 - 选择身份后更新 `From`, `Reply-To`, 固定 Bcc 和签名; 发送请求携带 `identityAccountId` 和 `identityEmail`.
 - 其余字段为收件人, 抄送, 密送, 主题, 正文, 附件和格式工具栏.
@@ -484,7 +484,7 @@ frontend/
 | `search_jobs` | `id`, `message_id`, `op`, `status`, `attempts`, `next_attempt_at`, `lease_until`, `last_error`, `created_at` | Bleve 索引任务; `op` 为 `index` 或 `delete`, `status` 为 `pending`, `processing`, `done`, `failed` |
 | `tasks` | `id`, `type`, `account_id`, `status`, `done`, `total`, `unit`, `message`, `error`, `started_at`, `updated_at`, `completed_at`, `dismissed_at` | 用户可见后台任务; `type` 包含 `scope_reconcile`; `status` 为 `pending`, `running`, `completed`, `failed`, `cancelled` |
 | `oauth_states` | `state`, `provider`, `verifier_enc`, `redirect_after`, `expires_at` | 10 分钟过期, 用后删除 |
-| `settings` | `key`, `value` | 全局设置; 包括同步间隔, 下载范围, 发送, 草稿, 标记保留, 签名, 写邮件窗口, 重试次数, 删除策略, 会话有效期, 附件与预取上限, CORS, 可信代理, 免提醒名单, OAuth 客户端与加密密钥, 日志级别和并发参数 |
+| `settings` | `key`, `value` | 全局设置; 包括同步间隔, 下载范围, 发送, 草稿, 标记保留, 签名, 写邮件窗口, 重试次数, 删除策略, 会话有效期, 附件与预取上限, OAuth 客户端与加密密钥, 日志级别和并发参数 |
 
 ### 5.2 约束与索引
 

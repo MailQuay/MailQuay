@@ -88,7 +88,9 @@ go run ./cmd/mailquay search reindex --all
 | 变量 | 必填 | 默认 | 说明 |
 | --- | --- | --- | --- |
 | `MAILQUAY_LISTEN_ADDR` | 否 | `:8080` | HTTP 监听地址 |
-| `MAILQUAY_PUBLIC_URL` | 否 | 空 | 公开地址的启动默认值, 保存后以数据库设置优先 |
+| `MAILQUAY_PUBLIC_URL` | 否 | 空 | 绝对公开地址, 用于 OAuth 回调和 Cookie 判断 |
+| `MAILQUAY_CORS_ORIGINS` | 否 | 空 | 允许的跨源来源, 逗号分隔 |
+| `MAILQUAY_INSECURE_ALLOW` | 否 | 空 | 免除非安全传输提醒的域名或 CIDR, 逗号分隔 |
 | `MAILQUAY_DATABASE_URL` | 是 | 空 | PostgreSQL 连接串 |
 | `MAILQUAY_DATA_DIR` | 否 | `./data` | blob, 正文文本缓存, Bleve 索引与临时文件目录 |
 | `MAILQUAY_SEARCH_PATH` | 否 | `$MAILQUAY_DATA_DIR/search` | Bleve 索引目录 |
@@ -96,9 +98,9 @@ go run ./cmd/mailquay search reindex --all
 | `MAILQUAY_SETUP_TOKEN` | 否 | 首次启动随机生成 | 首次创建所有者账号的一次性 token |
 | `MAILQUAY_LOG_LEVEL` | 否 | `info` | 启动日志级别, 之后可在网页中修改 |
 | `MAILQUAY_LOG_FORMAT` | 否 | `text` | `text` 或 `json` |
-| `MAILQUAY_TRUSTED_PROXIES` | 否 | 空 | 可信代理 CIDR 的启动默认值, 逗号分隔, 保存后以数据库设置优先 |
+| `MAILQUAY_TRUSTED_PROXIES` | 否 | 空 | 可信代理 CIDR, 逗号分隔 |
 
-除以上启动参数外, 会话有效期, 同步与 POP3 轮询间隔, 正文预取上限, 附件上限, CORS, 可信代理, 免提醒域名, OAuth 应用凭据, 日志级别和并发参数都保存在 `settings` 表, 通过设置页修改, 修改后立即影响新任务.
+除以上启动参数外, 会话有效期, 同步与 POP3 轮询间隔, 正文预取上限, 附件上限, OAuth 应用凭据, 日志级别和并发参数都保存在 `settings` 表, 通过设置页修改, 修改后立即影响新任务. 公开地址, CORS, 可信代理和非安全传输豁免只通过环境变量配置, 修改后需要重启.
 
 启动时校验规则:
 
@@ -212,7 +214,7 @@ MAILQUAY_TEST_DATABASE_URL='postgres://mailquay:mailquay@127.0.0.1:5432/mailquay
 - POP3 使用 GreenMail 或 Dovecot 测试实例, 覆盖 UIDL 增量, TOP 缺失, RETR, DELE 与 QUIT 提交, 以及轮询去重.
 - SMTP 使用 Mailpit 或本地 sink 捕获邮件, 断言 MIME 结构, 附件和重试.
 - 登录测试覆盖用户名和密码, 不涉及邮箱绑定或邮件验证码, 以及后续 OAuth2 登录的预留边界.
-- 传输安全测试覆盖可信代理的 `X-Forwarded-Proto`, 伪造头被忽略, 默认 loopback/私网豁免, 额外 `insecureAllow` 域名/CIDR, 以及红色提醒条不渲染/渲染.
+- 传输安全测试覆盖可信代理的 `X-Forwarded-Proto`, 伪造头被忽略, 默认 loopback/私网豁免, 额外 `MAILQUAY_INSECURE_ALLOW` 域名/CIDR, 以及红色提醒条不渲染/渲染.
 - 迁移测试覆盖空库, 历史数据和回滚.
 - 账号连接测试覆盖非标准端口和三种传输安全模式, 断言实际连接的是用户填写的端口.
 - 静态资源测试覆盖 core 不带前端资源且根路径返回 404, full 内嵌前端并对客户端路由回落到 `index.html`, 缺失的 `assets` 和带扩展名文件返回 404, 非 GET/HEAD 返回 405, 两种构建 API 行为一致.
@@ -245,7 +247,7 @@ pnpm e2e
 - 搜索页覆盖标题/全部模式, 账号/文件夹/收件人/发件人/附件组合, 搜索条件在页面状态中的保持, 以及本地归档结果标识.
 - 写邮件组件覆盖身份选择, 默认身份, 签名切换, 草稿恢复, 以及发送请求携带 `identityAccountId` 和 `identityEmail`.
 - 写邮件窗口覆盖默认浮层, 设置为新窗口后的 `/compose` 通过 `window.name` 恢复草稿, 同一草稿聚焦已有窗口, 以及关闭前保存.
-- 阅读器操作覆盖回复, 转发, 标记, 本地归档, 删除, 以及全部回复菜单.
+- 阅读器顶部左侧是回复和转发, 右侧是标记, 本地归档和删除, 全部为图标按钮.
 - 设置页面覆盖独立布局, 分组路径和深链接, 关闭返回和保存反馈.
 - Playwright 使用 mock API 覆盖登录, 列表, 阅读, 写邮件主流程, 设置跳转, 以及多任务同时运行时的任务面板.
 - 不测试实现细节, 不复制后端校验逻辑.

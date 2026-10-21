@@ -970,7 +970,6 @@ type Settings struct {
 	BodyPrefetchMaxBytes          int                             `json:"bodyPrefetchMaxBytes"`
 	ComposeWindowMode             SettingsComposeWindowMode       `json:"composeWindowMode"`
 	Concurrency                   ConcurrencySettings             `json:"concurrency"`
-	CorsOrigins                   []string                        `json:"corsOrigins"`
 	DefaultDownloadScope          SettingsDefaultDownloadScope    `json:"defaultDownloadScope"`
 	DefaultInitialSyncRange       SettingsDefaultInitialSyncRange `json:"defaultInitialSyncRange"`
 	DeleteMode                    SettingsDeleteMode              `json:"deleteMode"`
@@ -980,7 +979,6 @@ type Settings struct {
 	DraftSyncMode                 SettingsDraftSyncMode           `json:"draftSyncMode"`
 	GoogleClientId                string                          `json:"googleClientId"`
 	GoogleSecretSet               bool                            `json:"googleSecretSet"`
-	InsecureAllow                 []string                        `json:"insecureAllow"`
 	Language                      SettingsLanguage                `json:"language"`
 	LogLevel                      *SettingsLogLevel               `json:"logLevel,omitempty"`
 	MaxAttachmentBytes            int                             `json:"maxAttachmentBytes"`
@@ -988,7 +986,6 @@ type Settings struct {
 	MicrosoftSecretSet            bool                            `json:"microsoftSecretSet"`
 	Pop3IntervalSeconds           int                             `json:"pop3IntervalSeconds"`
 	PreserveMarkedOnAccountDelete bool                            `json:"preserveMarkedOnAccountDelete"`
-	PublicUrl                     string                          `json:"publicUrl"`
 	Resources                     ResourceInfo                    `json:"resources"`
 	SendRetryLimit                int                             `json:"sendRetryLimit"`
 	SentSyncMode                  SettingsSentSyncMode            `json:"sentSyncMode"`
@@ -996,7 +993,6 @@ type Settings struct {
 	SignaturePosition             SettingsSignaturePosition       `json:"signaturePosition"`
 	SyncIntervalSeconds           int                             `json:"syncIntervalSeconds"`
 	Timezone                      string                          `json:"timezone"`
-	TrustedProxies                []string                        `json:"trustedProxies"`
 }
 
 // SettingsComposeWindowMode defines model for Settings.ComposeWindowMode.
@@ -1031,7 +1027,6 @@ type SettingsUpdate struct {
 	BodyPrefetchMaxBytes          *int                                   `json:"bodyPrefetchMaxBytes,omitempty"`
 	ComposeWindowMode             *SettingsUpdateComposeWindowMode       `json:"composeWindowMode,omitempty"`
 	ConcurrencyMode               *SettingsUpdateConcurrencyMode         `json:"concurrencyMode,omitempty"`
-	CorsOrigins                   *[]string                              `json:"corsOrigins,omitempty"`
 	DefaultDownloadScope          *SettingsUpdateDefaultDownloadScope    `json:"defaultDownloadScope,omitempty"`
 	DefaultInitialSyncRange       *SettingsUpdateDefaultInitialSyncRange `json:"defaultInitialSyncRange,omitempty"`
 	DeleteMode                    *SettingsUpdateDeleteMode              `json:"deleteMode,omitempty"`
@@ -1043,7 +1038,6 @@ type SettingsUpdate struct {
 	GoogleClientId                *string                                `json:"googleClientId,omitempty"`
 	GoogleClientSecret            *string                                `json:"googleClientSecret,omitempty"`
 	IndexBatchSize                *int                                   `json:"indexBatchSize,omitempty"`
-	InsecureAllow                 *[]string                              `json:"insecureAllow,omitempty"`
 	Language                      *SettingsUpdateLanguage                `json:"language,omitempty"`
 	LogLevel                      *SettingsUpdateLogLevel                `json:"logLevel,omitempty"`
 	MaxAttachmentBytes            *int                                   `json:"maxAttachmentBytes,omitempty"`
@@ -1051,7 +1045,6 @@ type SettingsUpdate struct {
 	MicrosoftClientSecret         *string                                `json:"microsoftClientSecret,omitempty"`
 	Pop3IntervalSeconds           *int                                   `json:"pop3IntervalSeconds,omitempty"`
 	PreserveMarkedOnAccountDelete *bool                                  `json:"preserveMarkedOnAccountDelete,omitempty"`
-	PublicUrl                     *string                                `json:"publicUrl,omitempty"`
 	SearchConcurrency             *int                                   `json:"searchConcurrency,omitempty"`
 	SendRetryLimit                *int                                   `json:"sendRetryLimit,omitempty"`
 	SentSyncMode                  *SettingsUpdateSentSyncMode            `json:"sentSyncMode,omitempty"`
@@ -1060,7 +1053,6 @@ type SettingsUpdate struct {
 	SyncConcurrency               *int                                   `json:"syncConcurrency,omitempty"`
 	SyncIntervalSeconds           *int                                   `json:"syncIntervalSeconds,omitempty"`
 	Timezone                      *string                                `json:"timezone,omitempty"`
-	TrustedProxies                *[]string                              `json:"trustedProxies,omitempty"`
 }
 
 // SettingsUpdateComposeWindowMode defines model for SettingsUpdate.ComposeWindowMode.

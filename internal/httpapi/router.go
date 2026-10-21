@@ -15,7 +15,6 @@ import (
 	"github.com/mailquay/mailquay/internal/auth"
 	"github.com/mailquay/mailquay/internal/events"
 	"github.com/mailquay/mailquay/internal/httpapi/oapi"
-	"github.com/mailquay/mailquay/internal/settings"
 	"github.com/mailquay/mailquay/internal/webassets"
 )
 
@@ -26,7 +25,7 @@ const requestIDKey requestIDKeyType = 1
 // NewRouter builds the HTTP handler with middleware and static assets.
 func NewRouter(srv *Server, hub *events.Hub, logger *slog.Logger) http.Handler {
 	router := chi.NewRouter()
-	router.Use(requestIDMiddleware, recoveryMiddleware(logger), loggingMiddleware(logger), securityHeaders, corsMiddleware(srv.settings))
+	router.Use(requestIDMiddleware, recoveryMiddleware(logger), loggingMiddleware(logger), securityHeaders, corsMiddleware(srv.cfg.CORSOrigins))
 
 	router.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -119,11 +118,11 @@ func securityHeaders(next http.Handler) http.Handler {
 	})
 }
 
-func corsMiddleware(settingsSvc *settings.Service) func(http.Handler) http.Handler {
+func corsMiddleware(origins []string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			origin := r.Header.Get("Origin")
-			allowed := settingsSvc.Current().CORSOrigins
+			allowed := origins
 			if origin != "" && len(allowed) > 0 {
 				if containsString(allowed, origin) {
 					w.Header().Set("Access-Control-Allow-Origin", origin)
@@ -186,10 +185,9 @@ func (s *Server) sessionMiddleware(next http.Handler) http.Handler {
 }
 
 func (s *Server) refreshSessionCookie(w http.ResponseWriter, r *http.Request, sess *auth.Session) {
-	values := s.settings.Current()
-	secure := auth.RequestScheme(r, values.TrustedProxies) == "https"
+	secure := auth.RequestScheme(r, s.cfg.TrustedProxies) == "https"
 	sameSite := http.SameSiteLaxMode
-	if len(values.CORSOrigins) > 0 {
+	if len(s.cfg.CORSOrigins) > 0 {
 		secure = true
 		sameSite = http.SameSiteNoneMode
 	}
@@ -212,7 +210,7 @@ func (s *Server) csrfMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if !sameOrigin(r, s.settings.Current().CORSOrigins) {
+		if !sameOrigin(r, s.cfg.CORSOrigins) {
 			s.error(w, r, http.StatusForbidden, "origin_rejected", "The request origin is not allowed.")
 			return
 		}

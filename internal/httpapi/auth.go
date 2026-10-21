@@ -15,11 +15,11 @@ func (s *Server) GetAuthStatus(w http.ResponseWriter, r *http.Request) {
 		s.internal(w, r, err)
 		return
 	}
-	scheme := auth.RequestScheme(r, s.settings.Current().TrustedProxies)
+	scheme := auth.RequestScheme(r, s.cfg.TrustedProxies)
 	status := oapi.AuthStatus{
 		NeedsSetup: needs,
 		Security: oapi.SecurityInfo{
-			InsecureTransport: auth.InsecureTransport(r, s.settings.Current().TrustedProxies, s.settings.Current().InsecureAllow),
+			InsecureTransport: auth.InsecureTransport(r, s.cfg.TrustedProxies, s.cfg.InsecureAllow),
 			Scheme:            scheme,
 			Host:              r.Host,
 		},
@@ -67,7 +67,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 		s.error(w, r, http.StatusBadRequest, "invalid_request", "Malformed request body.")
 		return
 	}
-	sess, err := s.auth.Login(r.Context(), body.Username, body.Password, r.UserAgent(), auth.ClientIP(r, s.settings.Current().TrustedProxies))
+	sess, err := s.auth.Login(r.Context(), body.Username, body.Password, r.UserAgent(), auth.ClientIP(r, s.cfg.TrustedProxies))
 	if err != nil {
 		switch {
 		case errors.Is(err, auth.ErrRateLimited):
@@ -139,9 +139,9 @@ func (s *Server) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) setAuthCookies(w http.ResponseWriter, r *http.Request, sess *auth.Session) {
-	secure := auth.RequestScheme(r, s.settings.Current().TrustedProxies) == "https"
+	secure := auth.RequestScheme(r, s.cfg.TrustedProxies) == "https"
 	sameSite := http.SameSiteLaxMode
-	if len(s.settings.Current().CORSOrigins) > 0 {
+	if len(s.cfg.CORSOrigins) > 0 {
 		secure = true
 		sameSite = http.SameSiteNoneMode
 	}
@@ -160,9 +160,9 @@ func (s *Server) setAuthCookies(w http.ResponseWriter, r *http.Request, sess *au
 }
 
 func (s *Server) clearAuthCookies(w http.ResponseWriter, r *http.Request) {
-	secure := auth.RequestScheme(r, s.settings.Current().TrustedProxies) == "https"
+	secure := auth.RequestScheme(r, s.cfg.TrustedProxies) == "https"
 	sameSite := http.SameSiteLaxMode
-	if len(s.settings.Current().CORSOrigins) > 0 {
+	if len(s.cfg.CORSOrigins) > 0 {
 		secure = true
 		sameSite = http.SameSiteNoneMode
 	}

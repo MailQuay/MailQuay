@@ -18,7 +18,9 @@ type Config struct {
 	SecretKey      string
 	LogLevel       string
 	LogFormat      string
-	TrustedProxies []*net.IPNet
+	TrustedProxies []string
+	CORSOrigins    []string
+	InsecureAllow  []string
 	SetupToken     string
 }
 
@@ -47,13 +49,21 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("MAILQUAY_PUBLIC_URL must be an absolute URL")
 		}
 	}
-	for _, raw := range splitList(env("MAILQUAY_TRUSTED_PROXIES", "")) {
-		_, network, err := net.ParseCIDR(raw)
-		if err != nil {
+	cfg.TrustedProxies = splitList(env("MAILQUAY_TRUSTED_PROXIES", ""))
+	for _, raw := range cfg.TrustedProxies {
+		if _, _, err := net.ParseCIDR(raw); err != nil {
 			return nil, fmt.Errorf("MAILQUAY_TRUSTED_PROXIES: invalid CIDR %q", raw)
 		}
-		cfg.TrustedProxies = append(cfg.TrustedProxies, network)
 	}
+	for _, raw := range splitList(env("MAILQUAY_CORS_ORIGINS", "")) {
+		u, err := url.Parse(raw)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" ||
+			(u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
+			return nil, fmt.Errorf("MAILQUAY_CORS_ORIGINS: invalid origin %q", raw)
+		}
+		cfg.CORSOrigins = append(cfg.CORSOrigins, u.Scheme+"://"+u.Host)
+	}
+	cfg.InsecureAllow = splitList(env("MAILQUAY_INSECURE_ALLOW", ""))
 	return cfg, nil
 }
 

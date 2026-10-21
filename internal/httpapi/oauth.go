@@ -17,6 +17,7 @@ import (
 
 	"github.com/mailquay/mailquay/internal/account"
 	"github.com/mailquay/mailquay/internal/auth"
+	"github.com/mailquay/mailquay/internal/config"
 	"github.com/mailquay/mailquay/internal/crypto"
 	"github.com/mailquay/mailquay/internal/httpapi/oapi"
 	"github.com/mailquay/mailquay/internal/settings"
@@ -26,6 +27,7 @@ import (
 
 // OAuth implements the authorization-code + PKCE flow for mail providers.
 type OAuth struct {
+	cfg      *config.Config
 	settings *settings.Service
 	store    *store.Store
 	accounts *account.Service
@@ -33,8 +35,8 @@ type OAuth struct {
 }
 
 // NewOAuth builds the OAuth helper.
-func NewOAuth(settingsSvc *settings.Service, st *store.Store, accounts *account.Service, cipher *crypto.Cipher) *OAuth {
-	return &OAuth{settings: settingsSvc, store: st, accounts: accounts, cipher: cipher}
+func NewOAuth(cfg *config.Config, settingsSvc *settings.Service, st *store.Store, accounts *account.Service, cipher *crypto.Cipher) *OAuth {
+	return &OAuth{cfg: cfg, settings: settingsSvc, store: st, accounts: accounts, cipher: cipher}
 }
 
 type providerConfig struct {
@@ -67,11 +69,10 @@ func (o *OAuth) provider(name string) (providerConfig, bool) {
 }
 
 func (o *OAuth) redirectURI(r *http.Request, provider string) string {
-	values := o.settings.Current()
-	if values.PublicURL != "" {
-		return strings.TrimRight(values.PublicURL, "/") + "/api/v1/oauth/" + provider + "/callback"
+	if o.cfg.PublicURL != "" {
+		return strings.TrimRight(o.cfg.PublicURL, "/") + "/api/v1/oauth/" + provider + "/callback"
 	}
-	scheme := auth.RequestScheme(r, values.TrustedProxies)
+	scheme := auth.RequestScheme(r, o.cfg.TrustedProxies)
 	return scheme + "://" + r.Host + "/api/v1/oauth/" + provider + "/callback"
 }
 

@@ -1663,27 +1663,17 @@ components:
         language: { type: string, enum: [en, zh-CN] }
         concurrency: { $ref: '#/components/schemas/ConcurrencySettings' }
         resources: { $ref: '#/components/schemas/ResourceInfo' }
-        publicUrl: { type: string }
         sessionTtlHours: { type: integer }
         syncIntervalSeconds: { type: integer }
         pop3IntervalSeconds: { type: integer }
         bodyPrefetchMaxBytes: { type: integer }
         maxAttachmentBytes: { type: integer }
-        corsOrigins:
-          type: array
-          items: { type: string }
-        trustedProxies:
-          type: array
-          items: { type: string }
-        insecureAllow:
-          type: array
-          items: { type: string }
         googleClientId: { type: string }
         microsoftClientId: { type: string }
         googleSecretSet: { type: boolean }
         microsoftSecretSet: { type: boolean }
         logLevel: { type: string, enum: [debug, info, warn, error] }
-      required: [defaultInitialSyncRange, defaultDownloadScope, preserveMarkedOnAccountDelete, sentSyncMode, draftSyncMode, draftPullIntervalSeconds, draftPushDelaySeconds, composeWindowMode, sendRetryLimit, deleteMode, deleteQueueDays, signaturePosition, timezone, language, concurrency, resources, publicUrl, sessionTtlHours, syncIntervalSeconds, pop3IntervalSeconds, bodyPrefetchMaxBytes, maxAttachmentBytes, corsOrigins, trustedProxies, insecureAllow, googleClientId, microsoftClientId, googleSecretSet, microsoftSecretSet]
+      required: [defaultInitialSyncRange, defaultDownloadScope, preserveMarkedOnAccountDelete, sentSyncMode, draftSyncMode, draftPullIntervalSeconds, draftPushDelaySeconds, composeWindowMode, sendRetryLimit, deleteMode, deleteQueueDays, signaturePosition, timezone, language, concurrency, resources, sessionTtlHours, syncIntervalSeconds, pop3IntervalSeconds, bodyPrefetchMaxBytes, maxAttachmentBytes, googleClientId, microsoftClientId, googleSecretSet, microsoftSecretSet]
     SettingsUpdate:
       type: object
       properties:
@@ -1706,21 +1696,11 @@ components:
         fetchConcurrency: { type: integer, minimum: 1, maximum: 32 }
         searchConcurrency: { type: integer, minimum: 1, maximum: 32 }
         indexBatchSize: { type: integer, minimum: 50, maximum: 500 }
-        publicUrl: { type: string }
         sessionTtlHours: { type: integer, minimum: 1, maximum: 8760 }
         syncIntervalSeconds: { type: integer, minimum: 30, maximum: 86400 }
         pop3IntervalSeconds: { type: integer, minimum: 30, maximum: 86400 }
         bodyPrefetchMaxBytes: { type: integer, minimum: 0, maximum: 1073741824 }
         maxAttachmentBytes: { type: integer, minimum: 1048576, maximum: 1073741824 }
-        corsOrigins:
-          type: array
-          items: { type: string }
-        trustedProxies:
-          type: array
-          items: { type: string }
-        insecureAllow:
-          type: array
-          items: { type: string }
         googleClientId: { type: string }
         microsoftClientId: { type: string }
         googleClientSecret: { type: string }

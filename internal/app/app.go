@@ -79,12 +79,8 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	resources := platform.DetectResources()
 	logger.Info("resource limits detected", "cpus", resources.CPUs, "memory_bytes", resources.MemoryBytes,
 		"cgroup_version", resources.CgroupVersion, "cpu_source", resources.CPUSource, "memory_source", resources.MemorySource)
-	trusted := make([]string, 0, len(cfg.TrustedProxies))
-	for _, network := range cfg.TrustedProxies {
-		trusted = append(trusted, network.String())
-	}
 	settingsSvc := settings.NewService(st, resources, cipher, settings.Bootstrap{
-		PublicURL: cfg.PublicURL, TrustedProxies: trusted, LogLevel: cfg.LogLevel,
+		LogLevel: cfg.LogLevel,
 	})
 	settingsSvc.OnChange = func(values settings.Values) {
 		levelVar.Set(platform.ParseLevel(values.LogLevel))

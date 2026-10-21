@@ -59,7 +59,7 @@ func NewServer(st *store.Store, cfg *config.Config, authSvc *auth.Service, accou
 		store: st, cfg: cfg, auth: authSvc, accounts: accounts, ids: ids, mailboxes: mailboxes,
 		messages: messages, compose: composeSvc, settings: settingsSvc, sync: syncSvc,
 		index: index, hub: hub, blobs: blobs, logger: logger, cipher: cipher,
-		oauth: NewOAuth(settingsSvc, st, accounts, cipher),
+		oauth: NewOAuth(cfg, settingsSvc, st, accounts, cipher),
 	}
 }
 

@@ -21,37 +21,33 @@ import (
 // Values holds every runtime-editable preference. Secrets are kept separately
 // and never serialized.
 type Values struct {
-	DefaultInitialSyncRange  string   `json:"defaultInitialSyncRange"`
-	DefaultDownloadScope     string   `json:"defaultDownloadScope"`
-	PreserveMarked           bool     `json:"preserveMarkedOnAccountDelete"`
-	SentSyncMode             string   `json:"sentSyncMode"`
-	DraftSyncMode            string   `json:"draftSyncMode"`
-	DraftPullIntervalSeconds int      `json:"draftPullIntervalSeconds"`
-	DraftPushDelaySeconds    int      `json:"draftPushDelaySeconds"`
-	ComposeWindowMode        string   `json:"composeWindowMode"`
-	SendRetryLimit           int      `json:"sendRetryLimit"`
-	DeleteMode               string   `json:"deleteMode"`
-	DeleteQueueDays          int      `json:"deleteQueueDays"`
-	SignaturePosition        string   `json:"signaturePosition"`
-	Timezone                 string   `json:"timezone"`
-	Language                 string   `json:"language"`
-	ConcurrencyMode          string   `json:"concurrencyMode"`
-	SyncConcurrency          int      `json:"syncConcurrency"`
-	FetchConcurrency         int      `json:"fetchConcurrency"`
-	SearchConcurrency        int      `json:"searchConcurrency"`
-	IndexBatchSize           int      `json:"indexBatchSize"`
-	PublicURL                string   `json:"publicUrl"`
-	SessionTTLHours          int      `json:"sessionTtlHours"`
-	SyncIntervalSeconds      int      `json:"syncIntervalSeconds"`
-	POP3IntervalSeconds      int      `json:"pop3IntervalSeconds"`
-	BodyPrefetchMaxBytes     int64    `json:"bodyPrefetchMaxBytes"`
-	MaxAttachmentBytes       int64    `json:"maxAttachmentBytes"`
-	CORSOrigins              []string `json:"corsOrigins"`
-	TrustedProxies           []string `json:"trustedProxies"`
-	InsecureAllow            []string `json:"insecureAllow"`
-	GoogleClientID           string   `json:"googleClientId"`
-	MicrosoftClientID        string   `json:"microsoftClientId"`
-	LogLevel                 string   `json:"logLevel"`
+	DefaultInitialSyncRange  string `json:"defaultInitialSyncRange"`
+	DefaultDownloadScope     string `json:"defaultDownloadScope"`
+	PreserveMarked           bool   `json:"preserveMarkedOnAccountDelete"`
+	SentSyncMode             string `json:"sentSyncMode"`
+	DraftSyncMode            string `json:"draftSyncMode"`
+	DraftPullIntervalSeconds int    `json:"draftPullIntervalSeconds"`
+	DraftPushDelaySeconds    int    `json:"draftPushDelaySeconds"`
+	ComposeWindowMode        string `json:"composeWindowMode"`
+	SendRetryLimit           int    `json:"sendRetryLimit"`
+	DeleteMode               string `json:"deleteMode"`
+	DeleteQueueDays          int    `json:"deleteQueueDays"`
+	SignaturePosition        string `json:"signaturePosition"`
+	Timezone                 string `json:"timezone"`
+	Language                 string `json:"language"`
+	ConcurrencyMode          string `json:"concurrencyMode"`
+	SyncConcurrency          int    `json:"syncConcurrency"`
+	FetchConcurrency         int    `json:"fetchConcurrency"`
+	SearchConcurrency        int    `json:"searchConcurrency"`
+	IndexBatchSize           int    `json:"indexBatchSize"`
+	SessionTTLHours          int    `json:"sessionTtlHours"`
+	SyncIntervalSeconds      int    `json:"syncIntervalSeconds"`
+	POP3IntervalSeconds      int    `json:"pop3IntervalSeconds"`
+	BodyPrefetchMaxBytes     int64  `json:"bodyPrefetchMaxBytes"`
+	MaxAttachmentBytes       int64  `json:"maxAttachmentBytes"`
+	GoogleClientID           string `json:"googleClientId"`
+	MicrosoftClientID        string `json:"microsoftClientId"`
+	LogLevel                 string `json:"logLevel"`
 }
 
 // Concurrency is the effective worker configuration.
@@ -80,15 +76,11 @@ type Snapshot struct {
 
 // Bootstrap seeds runtime settings on the first read from environment values.
 type Bootstrap struct {
-	PublicURL       string
 	SessionTTL      time.Duration
 	SyncInterval    time.Duration
 	POP3Interval    time.Duration
 	BodyPrefetchMax int64
 	MaxAttachment   int64
-	CORSOrigins     []string
-	TrustedProxies  []string
-	InsecureAllow   []string
 	GoogleClientID  string
 	GoogleSecret    string
 	MicrosoftID     string
@@ -390,9 +382,6 @@ func manualConcurrency(v Values) Concurrency {
 }
 
 func applyBootstrap(v *Values, b Bootstrap) {
-	if b.PublicURL != "" {
-		v.PublicURL = b.PublicURL
-	}
 	if b.SessionTTL > 0 {
 		v.SessionTTLHours = int(b.SessionTTL / time.Hour)
 	}
@@ -407,15 +396,6 @@ func applyBootstrap(v *Values, b Bootstrap) {
 	}
 	if b.MaxAttachment > 0 {
 		v.MaxAttachmentBytes = b.MaxAttachment
-	}
-	if len(b.CORSOrigins) > 0 {
-		v.CORSOrigins = b.CORSOrigins
-	}
-	if len(b.TrustedProxies) > 0 {
-		v.TrustedProxies = b.TrustedProxies
-	}
-	if len(b.InsecureAllow) > 0 {
-		v.InsecureAllow = b.InsecureAllow
 	}
 	if b.GoogleClientID != "" {
 		v.GoogleClientID = b.GoogleClientID
@@ -488,8 +468,6 @@ func decodeInto(key string, raw json.RawMessage, v *Values) error {
 		return json.Unmarshal(raw, &v.SearchConcurrency)
 	case "index_batch_size":
 		return json.Unmarshal(raw, &v.IndexBatchSize)
-	case "public_url":
-		return json.Unmarshal(raw, &v.PublicURL)
 	case "session_ttl_hours":
 		return json.Unmarshal(raw, &v.SessionTTLHours)
 	case "sync_interval_seconds":
@@ -500,12 +478,6 @@ func decodeInto(key string, raw json.RawMessage, v *Values) error {
 		return json.Unmarshal(raw, &v.BodyPrefetchMaxBytes)
 	case "max_attachment_bytes":
 		return json.Unmarshal(raw, &v.MaxAttachmentBytes)
-	case "cors_origins":
-		return json.Unmarshal(raw, &v.CORSOrigins)
-	case "trusted_proxies":
-		return json.Unmarshal(raw, &v.TrustedProxies)
-	case "insecure_allow":
-		return json.Unmarshal(raw, &v.InsecureAllow)
 	case "google_client_id":
 		return json.Unmarshal(raw, &v.GoogleClientID)
 	case "microsoft_client_id":
@@ -556,8 +528,6 @@ func setField(key string, raw json.RawMessage, v *Values) error {
 		return json.Unmarshal(raw, &v.SearchConcurrency)
 	case "index_batch_size":
 		return json.Unmarshal(raw, &v.IndexBatchSize)
-	case "public_url":
-		return json.Unmarshal(raw, &v.PublicURL)
 	case "session_ttl_hours":
 		return json.Unmarshal(raw, &v.SessionTTLHours)
 	case "sync_interval_seconds":
@@ -568,12 +538,6 @@ func setField(key string, raw json.RawMessage, v *Values) error {
 		return json.Unmarshal(raw, &v.BodyPrefetchMaxBytes)
 	case "max_attachment_bytes":
 		return json.Unmarshal(raw, &v.MaxAttachmentBytes)
-	case "cors_origins":
-		return json.Unmarshal(raw, &v.CORSOrigins)
-	case "trusted_proxies":
-		return json.Unmarshal(raw, &v.TrustedProxies)
-	case "insecure_allow":
-		return json.Unmarshal(raw, &v.InsecureAllow)
 	case "google_client_id":
 		return json.Unmarshal(raw, &v.GoogleClientID)
 	case "microsoft_client_id":
@@ -624,8 +588,6 @@ func fieldValue(key string, v Values) (any, error) {
 		return v.SearchConcurrency, nil
 	case "index_batch_size":
 		return v.IndexBatchSize, nil
-	case "public_url":
-		return v.PublicURL, nil
 	case "session_ttl_hours":
 		return v.SessionTTLHours, nil
 	case "sync_interval_seconds":
@@ -636,12 +598,6 @@ func fieldValue(key string, v Values) (any, error) {
 		return v.BodyPrefetchMaxBytes, nil
 	case "max_attachment_bytes":
 		return v.MaxAttachmentBytes, nil
-	case "cors_origins":
-		return v.CORSOrigins, nil
-	case "trusted_proxies":
-		return v.TrustedProxies, nil
-	case "insecure_allow":
-		return v.InsecureAllow, nil
 	case "google_client_id":
 		return v.GoogleClientID, nil
 	case "microsoft_client_id":
@@ -700,9 +656,6 @@ func validate(v Values) error {
 	default:
 		return errors.New("logLevel must be debug, info, warn or error")
 	}
-	if v.PublicURL != "" && !strings.HasPrefix(v.PublicURL, "http://") && !strings.HasPrefix(v.PublicURL, "https://") {
-		return errors.New("publicUrl must be an absolute http(s) URL")
-	}
 	if v.SessionTTLHours < 1 || v.SessionTTLHours > 8760 {
 		return errors.New("sessionTtlHours must be 1-8760")
 	}
@@ -717,11 +670,6 @@ func validate(v Values) error {
 	}
 	if v.MaxAttachmentBytes < 1<<20 || v.MaxAttachmentBytes > 1<<30 {
 		return errors.New("maxAttachmentBytes must be 1 MiB-1 GiB")
-	}
-	for _, entry := range append(append([]string{}, v.CORSOrigins...), append(v.TrustedProxies, v.InsecureAllow...)...) {
-		if strings.TrimSpace(entry) == "" {
-			return errors.New("network lists cannot contain empty entries")
-		}
 	}
 	return nil
 }

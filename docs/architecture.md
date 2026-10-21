@@ -287,7 +287,7 @@ sequenceDiagram
 - identity 保存显示名, 邮箱, 组织, Reply-To, 固定 Bcc, HTML/纯文本签名和签名插入时机; 发信使用所属账号的 SMTP 配置.
 - 签名插入时机为 `all`, `new`, `reply`, `forward`, `none`; 回复时默认放在引用上方, 不覆盖引用内容.
 - 任意身份都可以用于发送或回复, 列表按邮箱账号分组.
-- 点击回复, 全部回复或转发时, 默认使用当前邮件所属邮箱账号的默认身份; 用户可以在发送前切换到任意身份.
+- 点击回复或转发时, 默认使用当前邮件所属邮箱账号的默认身份; 用户可以在发送前切换到任意身份.
 - 新建邮件默认使用当前选中邮箱账号的默认身份; 在全部账号视图下使用上次使用的身份, 没有记录时用全局默认身份.
 - 原邮件所属账号已删除时, 回退到当前账号默认身份, 并在发送窗口提示该邮件是本地保留副本.
 - 发送前生成稳定的 `Message-ID`, 写入草稿并随 outbox 保存, 重试时复用; outbox 同时保存 `identity_account_id`, `identity_email` 和 `draft_id`.
@@ -403,7 +403,7 @@ sequenceDiagram
 ### 4.7 运行时配置
 
 - 除数据库连接, 监听地址, 数据目录, 搜索目录, 主密钥和一次性 setup token 外, 运行参数都保存在 `settings` 表.
-- 设置页的"服务器"分组提供公开地址, 会话有效期, 同步与 POP3 轮询间隔, 正文预取上限, 附件上限, CORS, 可信代理, 免提醒域名, OAuth 客户端与密钥, 日志级别和并发模式.
+- 设置页的"服务器"分组提供会话有效期, 同步与 POP3 轮询间隔, 正文预取上限, 附件上限, OAuth 客户端与密钥, 日志级别和并发模式; 公开地址, CORS, 可信代理和免提醒域名只通过环境变量配置.
 - 环境变量 `MAILQUAY_PUBLIC_URL` 和 `MAILQUAY_TRUSTED_PROXIES` 只作为首次启动的默认值, 数据库中存在同名字段后以数据库为准.
 - OAuth 客户端密钥使用主密钥加密后写入 `settings`, API 只返回是否已配置, 不回传明文.
 - 修改后新任务和新请求立即使用新值; 正在运行的同步或发送任务继续使用旧值.
@@ -551,7 +551,7 @@ HTTP 层注意:
 - 设置的每个分组是独立全屏页面, 有固定路径, 共用左侧导航, 登录用户头部, 搜索框和关闭按钮; 不套用主应用壳.
 - 写邮件窗口点击顶栏"写邮件"打开, 左上角发送按钮和下拉箭头打开身份选择; 身份列表跨账号按账号分组, 支持搜索.
 - 新窗口模式打开独立 `/compose` 页面, 草稿 ID 通过 `window.name` 传递, 跨窗口草稿同步和窗口聚焦使用 `BroadcastChannel`; 不使用路径参数或查询参数.
-- 回复, 转发, 标记, 本地归档, 删除放在阅读器顶部, 不放在全局顶栏; 全部回复放在回复菜单.
+- 阅读器顶部左侧是回复和转发, 右侧是标记, 本地归档和删除; 全部使用图标按钮, 带 `aria-label` 和 tooltip, 不放在全局顶栏.
 - 添加账号使用引导流程: 先输入邮箱和密码, 自动发现服务器; 再确认收信协议和 SMTP 地址; 然后分别确认收信和发信凭据; 最后设置显示名称和同步范围.
 - 收信凭据和发信凭据默认都复用邮箱和密码, 可以分别修改; 编辑已有账号时同样可以单独更新 SMTP 用户名和密码.
 - 账号表单的邮箱和密码使用单行 `textarea` 渲染, 并带密码管理器忽略属性, 避免浏览器自动填充和扩展弹窗把邮箱账号当成登录凭据.
@@ -585,13 +585,13 @@ HTTP 层注意:
 ### 8.2 传输安全提醒
 
 - TLS 由外部 Nginx, Caddy 或平台入口终止; 应用容器只处理 HTTP.
-- 后端只在请求来自设置中的可信代理 CIDR 时信任 `X-Forwarded-Proto`; 其他来源使用直连 TLS 状态, 防止伪造头.
+- 后端只在请求来自 `MAILQUAY_TRUSTED_PROXIES` 中的 CIDR 时信任 `X-Forwarded-Proto`; 其他来源使用直连 TLS 状态, 防止伪造头.
 - 请求协议为 `https` 时不显示提醒.
 - 默认豁免: `localhost`, `.localhost`, `.local`, `.lan`, `.internal`, `.home.arpa`, `127.0.0.0/8`, `::1/128`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`, `fc00::/7`, `fe80::/10`.
-- 设置中的免提醒域名或 CIDR 用于额外放行内网或自建域名.
+- `MAILQUAY_INSECURE_ALLOW` 中的域名或 CIDR 用于额外放行内网或自建域名.
 - 非 HTTPS 且不在豁免范围时, `/auth/me` 返回 `insecureTransport=true`, 前端在应用最顶部显示红色提醒条.
 - 提醒条位于内容区顶栏之上, 全宽, 不可关闭, 不可隐藏, 不写入本地设置; 只有请求命中豁免域名或 CIDR 时才不渲染.
-- 提醒条文案说明凭据和会话可能被窃听, 并提示配置 HTTPS 或在设置中添加免提醒域名.
+- 提醒条文案说明凭据和会话可能被窃听, 并提示配置 HTTPS 或设置 `MAILQUAY_INSECURE_ALLOW`.
 
 ### 8.3 CSRF 与请求校验
 
@@ -650,8 +650,8 @@ flowchart LR
 ```
 
 - 含前端版由 `mailquay` 同端口提供前后端; 反向代理必须设置 `X-Forwarded-Proto`.
-- 静态托管只部署 `frontend` 的 `dist/`, 通过 `VITE_API_BASE_URL` 或 `config.js` 指向后端; 跨源时在设置中配置 CORS, 并使用 HTTPS.
-- `mailquay` 只信任来自设置中可信代理 CIDR 的转发头, 其他来源的 `X-Forwarded-Proto` 忽略.
+- 静态托管只部署 `frontend` 的 `dist/`, 通过 `VITE_API_BASE_URL` 或 `config.js` 指向后端; 跨源时通过 `MAILQUAY_CORS_ORIGINS` 配置 CORS, 并使用 HTTPS.
+- `mailquay` 只信任来自 `MAILQUAY_TRUSTED_PROXIES` CIDR 的转发头, 其他来源的 `X-Forwarded-Proto` 忽略.
 - `mailquay` 以非 root 用户运行, 只暴露内部端口.
 - `postgres` 使用健康检查, 数据目录绑定挂载到宿主机.
 - 发布镜像为 `linux/amd64` 和 `linux/arm64` 多架构 manifest; Windows 和 macOS 使用独立二进制.
@@ -665,7 +665,7 @@ flowchart LR
   1. `config.js` 的运行时 `apiBaseUrl`.
   2. 构建时 `VITE_API_BASE_URL`.
   3. 同源 `/api/v1`.
-- 默认走同源, 此时无需配置地址, 也没有 CORS. 只有前后端分开部署时才设置完整 URL, 并同时配置后端 CORS; 跨源使用 HTTPS 和 `SameSite=None` Cookie.
+- 默认走同源, 此时无需配置地址, 也没有 CORS. 只有前后端分开部署时才设置完整 URL, 并通过 `MAILQUAY_CORS_ORIGINS` 配置后端 CORS; 跨源使用 HTTPS 和 `SameSite=None` Cookie.
 
 ### 9.3 备份与升级
 
