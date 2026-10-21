@@ -33,6 +33,10 @@ type Values struct {
 	DeleteMode               string `json:"deleteMode"`
 	DeleteQueueDays          int    `json:"deleteQueueDays"`
 	SignaturePosition        string `json:"signaturePosition"`
+	NetworkAvatars           bool   `json:"networkAvatars"`
+	GravatarAvatars          bool   `json:"gravatarAvatars"`
+	BimiAvatars              bool   `json:"bimiAvatars"`
+	GoogleFaviconAvatars     bool   `json:"googleFaviconAvatars"`
 	Timezone                 string `json:"timezone"`
 	Language                 string `json:"language"`
 	ConcurrencyMode          string `json:"concurrencyMode"`
@@ -103,6 +107,10 @@ func Defaults() Values {
 		DeleteMode:               "provider_auto",
 		DeleteQueueDays:          30,
 		SignaturePosition:        "above_quote",
+		NetworkAvatars:           true,
+		GravatarAvatars:          true,
+		BimiAvatars:              true,
+		GoogleFaviconAvatars:     true,
 		Timezone:                 "UTC",
 		Language:                 "en",
 		ConcurrencyMode:          "auto",
@@ -454,6 +462,14 @@ func decodeInto(key string, raw json.RawMessage, v *Values) error {
 		return json.Unmarshal(raw, &v.DeleteQueueDays)
 	case "signature_position":
 		return json.Unmarshal(raw, &v.SignaturePosition)
+	case "network_avatars":
+		return json.Unmarshal(raw, &v.NetworkAvatars)
+	case "gravatar_avatars":
+		return json.Unmarshal(raw, &v.GravatarAvatars)
+	case "bimi_avatars":
+		return json.Unmarshal(raw, &v.BimiAvatars)
+	case "google_favicon_avatars":
+		return json.Unmarshal(raw, &v.GoogleFaviconAvatars)
 	case "timezone":
 		return json.Unmarshal(raw, &v.Timezone)
 	case "language":
@@ -514,6 +530,14 @@ func setField(key string, raw json.RawMessage, v *Values) error {
 		return json.Unmarshal(raw, &v.DeleteQueueDays)
 	case "signature_position":
 		return json.Unmarshal(raw, &v.SignaturePosition)
+	case "network_avatars":
+		return json.Unmarshal(raw, &v.NetworkAvatars)
+	case "gravatar_avatars":
+		return json.Unmarshal(raw, &v.GravatarAvatars)
+	case "bimi_avatars":
+		return json.Unmarshal(raw, &v.BimiAvatars)
+	case "google_favicon_avatars":
+		return json.Unmarshal(raw, &v.GoogleFaviconAvatars)
 	case "timezone":
 		return json.Unmarshal(raw, &v.Timezone)
 	case "language":
@@ -574,6 +598,14 @@ func fieldValue(key string, v Values) (any, error) {
 		return v.DeleteQueueDays, nil
 	case "signature_position":
 		return v.SignaturePosition, nil
+	case "network_avatars":
+		return v.NetworkAvatars, nil
+	case "gravatar_avatars":
+		return v.GravatarAvatars, nil
+	case "bimi_avatars":
+		return v.BimiAvatars, nil
+	case "google_favicon_avatars":
+		return v.GoogleFaviconAvatars, nil
 	case "timezone":
 		return v.Timezone, nil
 	case "language":

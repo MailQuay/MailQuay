@@ -484,7 +484,7 @@ frontend/
 | `search_jobs` | `id`, `message_id`, `op`, `status`, `attempts`, `next_attempt_at`, `lease_until`, `last_error`, `created_at` | Bleve 索引任务; `op` 为 `index` 或 `delete`, `status` 为 `pending`, `processing`, `done`, `failed` |
 | `tasks` | `id`, `type`, `account_id`, `status`, `done`, `total`, `unit`, `message`, `error`, `started_at`, `updated_at`, `completed_at`, `dismissed_at` | 用户可见后台任务; `type` 包含 `scope_reconcile`; `status` 为 `pending`, `running`, `completed`, `failed`, `cancelled` |
 | `oauth_states` | `state`, `provider`, `verifier_enc`, `redirect_after`, `expires_at` | 10 分钟过期, 用后删除 |
-| `settings` | `key`, `value` | 全局设置; 包括同步间隔, 下载范围, 发送, 草稿, 标记保留, 签名, 写邮件窗口, 重试次数, 删除策略, 会话有效期, 附件与预取上限, OAuth 客户端与加密密钥, 日志级别和并发参数 |
+| `settings` | `key`, `value` | 全局设置; 包括同步间隔, 下载范围, 发送, 草稿, 标记保留, 签名, 写邮件窗口, 重试次数, 删除策略, 会话有效期, 附件与预取上限, OAuth 客户端与加密密钥, 网络头像来源, 日志级别和并发参数 |
 
 ### 5.2 约束与索引
 
@@ -609,6 +609,7 @@ frontend/
 | `POST` | `/attachments` | 上传草稿附件, 返回附件元数据 |
 | `GET` | `/settings` | 读取全局设置, 检测到的资源和生效并发 |
 | `PATCH` | `/settings` | 更新全局设置 |
+| `GET` | `/avatars` | 按邮箱代理获取头像; 后端按设置依次尝试 Gravatar, BIMI 和发信域名 favicon, 关闭的模块不会发起请求 |
 | `POST` | `/settings/concurrency/detect` | 重新检测 cgroup 限制并返回建议并发, 不改变手动值 |
 | `GET` | `/events` | SSE 事件流 |
 

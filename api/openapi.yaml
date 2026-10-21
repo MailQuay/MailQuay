@@ -15,6 +15,7 @@ tags:
   - name: mailboxes
   - name: messages
   - name: archive
+  - name: avatars
   - name: compose
   - name: outbox
   - name: search
@@ -632,6 +633,46 @@ paths:
               schema: { type: string, format: binary }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /avatars:
+    get:
+      operationId: getAvatar
+      tags: [avatars]
+      parameters:
+        - name: email
+          in: query
+          required: true
+          schema: { type: string }
+        - name: gravatar
+          in: query
+          required: false
+          schema: { type: boolean, default: true }
+        - name: favicon
+          in: query
+          required: false
+          schema: { type: boolean, default: true }
+        - name: bimi
+          in: query
+          required: false
+          schema: { type: boolean, default: true }
+        - name: size
+          in: query
+          required: false
+          schema: { type: integer, minimum: 16, maximum: 256, default: 80 }
+      responses:
+        '200':
+          description: Avatar for the email address, preferring Gravatar over the domain favicon.
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/webp:
+              schema: { type: string, format: binary }
+            image/gif:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { description: No avatar available for the email address. }
   /delete-queue:
     get:
       operationId: listDeleteQueue
@@ -1659,6 +1700,10 @@ components:
         deleteMode: { type: string, enum: [provider_auto, local_queue] }
         deleteQueueDays: { type: integer }
         signaturePosition: { type: string, enum: [above_quote, below_quote] }
+        networkAvatars: { type: boolean }
+        gravatarAvatars: { type: boolean }
+        bimiAvatars: { type: boolean }
+        googleFaviconAvatars: { type: boolean }
         timezone: { type: string }
         language: { type: string, enum: [en, zh-CN] }
         concurrency: { $ref: '#/components/schemas/ConcurrencySettings' }
@@ -1673,7 +1718,7 @@ components:
         googleSecretSet: { type: boolean }
         microsoftSecretSet: { type: boolean }
         logLevel: { type: string, enum: [debug, info, warn, error] }
-      required: [defaultInitialSyncRange, defaultDownloadScope, preserveMarkedOnAccountDelete, sentSyncMode, draftSyncMode, draftPullIntervalSeconds, draftPushDelaySeconds, composeWindowMode, sendRetryLimit, deleteMode, deleteQueueDays, signaturePosition, timezone, language, concurrency, resources, sessionTtlHours, syncIntervalSeconds, pop3IntervalSeconds, bodyPrefetchMaxBytes, maxAttachmentBytes, googleClientId, microsoftClientId, googleSecretSet, microsoftSecretSet]
+      required: [defaultInitialSyncRange, defaultDownloadScope, preserveMarkedOnAccountDelete, sentSyncMode, draftSyncMode, draftPullIntervalSeconds, draftPushDelaySeconds, composeWindowMode, sendRetryLimit, deleteMode, deleteQueueDays, signaturePosition, networkAvatars, gravatarAvatars, bimiAvatars, googleFaviconAvatars, timezone, language, concurrency, resources, sessionTtlHours, syncIntervalSeconds, pop3IntervalSeconds, bodyPrefetchMaxBytes, maxAttachmentBytes, googleClientId, microsoftClientId, googleSecretSet, microsoftSecretSet]
     SettingsUpdate:
       type: object
       properties:
@@ -1689,6 +1734,10 @@ components:
         deleteMode: { type: string, enum: [provider_auto, local_queue] }
         deleteQueueDays: { type: integer, minimum: 1, maximum: 365 }
         signaturePosition: { type: string, enum: [above_quote, below_quote] }
+        networkAvatars: { type: boolean }
+        gravatarAvatars: { type: boolean }
+        bimiAvatars: { type: boolean }
+        googleFaviconAvatars: { type: boolean }
         timezone: { type: string }
         language: { type: string, enum: [en, zh-CN] }
         concurrencyMode: { type: string, enum: [auto, manual] }

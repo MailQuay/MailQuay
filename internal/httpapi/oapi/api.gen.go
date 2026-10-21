@@ -967,6 +967,7 @@ type SendRequest struct {
 
 // Settings defines model for Settings.
 type Settings struct {
+	BimiAvatars                   bool                            `json:"bimiAvatars"`
 	BodyPrefetchMaxBytes          int                             `json:"bodyPrefetchMaxBytes"`
 	ComposeWindowMode             SettingsComposeWindowMode       `json:"composeWindowMode"`
 	Concurrency                   ConcurrencySettings             `json:"concurrency"`
@@ -978,12 +979,15 @@ type Settings struct {
 	DraftPushDelaySeconds         int                             `json:"draftPushDelaySeconds"`
 	DraftSyncMode                 SettingsDraftSyncMode           `json:"draftSyncMode"`
 	GoogleClientId                string                          `json:"googleClientId"`
+	GoogleFaviconAvatars          bool                            `json:"googleFaviconAvatars"`
 	GoogleSecretSet               bool                            `json:"googleSecretSet"`
+	GravatarAvatars               bool                            `json:"gravatarAvatars"`
 	Language                      SettingsLanguage                `json:"language"`
 	LogLevel                      *SettingsLogLevel               `json:"logLevel,omitempty"`
 	MaxAttachmentBytes            int                             `json:"maxAttachmentBytes"`
 	MicrosoftClientId             string                          `json:"microsoftClientId"`
 	MicrosoftSecretSet            bool                            `json:"microsoftSecretSet"`
+	NetworkAvatars                bool                            `json:"networkAvatars"`
 	Pop3IntervalSeconds           int                             `json:"pop3IntervalSeconds"`
 	PreserveMarkedOnAccountDelete bool                            `json:"preserveMarkedOnAccountDelete"`
 	Resources                     ResourceInfo                    `json:"resources"`
@@ -1024,6 +1028,7 @@ type SettingsSignaturePosition string
 
 // SettingsUpdate defines model for SettingsUpdate.
 type SettingsUpdate struct {
+	BimiAvatars                   *bool                                  `json:"bimiAvatars,omitempty"`
 	BodyPrefetchMaxBytes          *int                                   `json:"bodyPrefetchMaxBytes,omitempty"`
 	ComposeWindowMode             *SettingsUpdateComposeWindowMode       `json:"composeWindowMode,omitempty"`
 	ConcurrencyMode               *SettingsUpdateConcurrencyMode         `json:"concurrencyMode,omitempty"`
@@ -1037,12 +1042,15 @@ type SettingsUpdate struct {
 	FetchConcurrency              *int                                   `json:"fetchConcurrency,omitempty"`
 	GoogleClientId                *string                                `json:"googleClientId,omitempty"`
 	GoogleClientSecret            *string                                `json:"googleClientSecret,omitempty"`
+	GoogleFaviconAvatars          *bool                                  `json:"googleFaviconAvatars,omitempty"`
+	GravatarAvatars               *bool                                  `json:"gravatarAvatars,omitempty"`
 	IndexBatchSize                *int                                   `json:"indexBatchSize,omitempty"`
 	Language                      *SettingsUpdateLanguage                `json:"language,omitempty"`
 	LogLevel                      *SettingsUpdateLogLevel                `json:"logLevel,omitempty"`
 	MaxAttachmentBytes            *int                                   `json:"maxAttachmentBytes,omitempty"`
 	MicrosoftClientId             *string                                `json:"microsoftClientId,omitempty"`
 	MicrosoftClientSecret         *string                                `json:"microsoftClientSecret,omitempty"`
+	NetworkAvatars                *bool                                  `json:"networkAvatars,omitempty"`
 	Pop3IntervalSeconds           *int                                   `json:"pop3IntervalSeconds,omitempty"`
 	PreserveMarkedOnAccountDelete *bool                                  `json:"preserveMarkedOnAccountDelete,omitempty"`
 	SearchConcurrency             *int                                   `json:"searchConcurrency,omitempty"`
@@ -1183,6 +1191,15 @@ type ListArchivesParams struct {
 // UploadAttachmentMultipartBody defines parameters for UploadAttachment.
 type UploadAttachmentMultipartBody struct {
 	File openapi_types.File `json:"file"`
+}
+
+// GetAvatarParams defines parameters for GetAvatar.
+type GetAvatarParams struct {
+	Email    string `form:"email" json:"email"`
+	Gravatar *bool  `form:"gravatar,omitempty" json:"gravatar,omitempty"`
+	Favicon  *bool  `form:"favicon,omitempty" json:"favicon,omitempty"`
+	Bimi     *bool  `form:"bimi,omitempty" json:"bimi,omitempty"`
+	Size     *int   `form:"size,omitempty" json:"size,omitempty"`
 }
 
 // ListDraftsParams defines parameters for ListDrafts.
@@ -1369,6 +1386,9 @@ type ServerInterface interface {
 
 	// (POST /auth/setup)
 	SetupOwner(w http.ResponseWriter, r *http.Request)
+
+	// (GET /avatars)
+	GetAvatar(w http.ResponseWriter, r *http.Request, params GetAvatarParams)
 
 	// (GET /delete-queue)
 	ListDeleteQueue(w http.ResponseWriter, r *http.Request)
@@ -1610,6 +1630,11 @@ func (_ Unimplemented) ChangePassword(w http.ResponseWriter, r *http.Request) {
 
 // (POST /auth/setup)
 func (_ Unimplemented) SetupOwner(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (GET /avatars)
+func (_ Unimplemented) GetAvatar(w http.ResponseWriter, r *http.Request, params GetAvatarParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2379,6 +2404,72 @@ func (siw *ServerInterfaceWrapper) SetupOwner(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetupOwner(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAvatar operation middleware
+func (siw *ServerInterfaceWrapper) GetAvatar(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetAvatarParams
+
+	// ------------- Required query parameter "email" -------------
+
+	if paramValue := r.URL.Query().Get("email"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "email"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "email", r.URL.Query(), &params.Email)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "email", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "gravatar" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "gravatar", r.URL.Query(), &params.Gravatar)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "gravatar", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "favicon" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "favicon", r.URL.Query(), &params.Favicon)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "favicon", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "bimi" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "bimi", r.URL.Query(), &params.Bimi)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "bimi", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "size" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "size", r.URL.Query(), &params.Size)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "size", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAvatar(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3532,6 +3623,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/auth/setup", wrapper.SetupOwner)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/avatars", wrapper.GetAvatar)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/delete-queue", wrapper.ListDeleteQueue)

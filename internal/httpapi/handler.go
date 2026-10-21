@@ -32,22 +32,23 @@ import (
 
 // Server implements the generated HTTP interface.
 type Server struct {
-	store     *store.Store
-	cfg       *config.Config
-	auth      *auth.Service
-	accounts  *account.Service
-	ids       *identity.Service
-	mailboxes *mailbox.Service
-	messages  *message.Service
-	compose   *compose.Service
-	settings  *settings.Service
-	sync      *syncservice.Service
-	index     *search.Index
-	hub       *events.Hub
-	blobs     *storage.Store
-	logger    *slog.Logger
-	oauth     *OAuth
-	cipher    *crypto.Cipher
+	store          *store.Store
+	cfg            *config.Config
+	auth           *auth.Service
+	accounts       *account.Service
+	ids            *identity.Service
+	mailboxes      *mailbox.Service
+	messages       *message.Service
+	compose        *compose.Service
+	settings       *settings.Service
+	avatarSettings avatarSettingsSource
+	sync           *syncservice.Service
+	index          *search.Index
+	hub            *events.Hub
+	blobs          *storage.Store
+	logger         *slog.Logger
+	oauth          *OAuth
+	cipher         *crypto.Cipher
 }
 
 // NewServer builds the HTTP server.
@@ -57,7 +58,7 @@ func NewServer(st *store.Store, cfg *config.Config, authSvc *auth.Service, accou
 	blobs *storage.Store, logger *slog.Logger, cipher *crypto.Cipher) *Server {
 	return &Server{
 		store: st, cfg: cfg, auth: authSvc, accounts: accounts, ids: ids, mailboxes: mailboxes,
-		messages: messages, compose: composeSvc, settings: settingsSvc, sync: syncSvc,
+		messages: messages, compose: composeSvc, settings: settingsSvc, avatarSettings: settingsSvc, sync: syncSvc,
 		index: index, hub: hub, blobs: blobs, logger: logger, cipher: cipher,
 		oauth: NewOAuth(cfg, settingsSvc, st, accounts, cipher),
 	}
