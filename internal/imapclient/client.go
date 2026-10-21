@@ -134,6 +134,52 @@ type Client struct {
 	closeErr  error
 }
 
+// staticRSACipherSuites use the RSA key exchange. Go stopped offering them by
+// default because they lack forward secrecy.
+var staticRSACipherSuites = []uint16{
+	tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+	tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+}
+
+// ecdheCipherSuites mirrors Go's default TLS 1.2 preference order. Setting
+// CipherSuites replaces the default list, so the ECDHE suites are spelled out
+// to keep forward secrecy ahead of the static RSA fallback.
+var ecdheCipherSuites = []uint16{
+	tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+	tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+	tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+	tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+	tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+	tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+}
+
+// imapTLSConfig builds the TLS configuration for host. The default suite list
+// is left untouched for servers that accept it.
+func imapTLSConfig(host string) *tls.Config {
+	cfg := &tls.Config{
+		ServerName: host,
+		MinVersion: tls.VersionTLS12,
+	}
+	if requiresStaticRSACiphers(host) {
+		cfg.CipherSuites = append(append([]uint16{}, ecdheCipherSuites...), staticRSACipherSuites...)
+	}
+	return cfg
+}
+
+// requiresStaticRSACiphers reports whether host is a China Mobile mail IMAP
+// endpoint. Their TLS gateway answers handshake_failure unless the
+// ClientHello advertises a static RSA key exchange suite, even when ECDHE
+// suites are offered.
+func requiresStaticRSACiphers(host string) bool {
+	host = strings.ToLower(strings.TrimSuffix(host, "."))
+	for _, domain := range []string{"139.com", "10086.cn"} {
+		if host == domain || strings.HasSuffix(host, "."+domain) {
+			return true
+		}
+	}
+	return false
+}
+
 // Dial connects, negotiates transport security, authenticates and returns a
 // ready client.
 func Dial(ctx context.Context, cfg Config) (*Client, error) {
@@ -153,10 +199,7 @@ func Dial(ctx context.Context, cfg Config) (*Client, error) {
 		timeout: timeout,
 		changes: make(chan struct{}, 1),
 	}
-	tlsConfig := &tls.Config{
-		ServerName: host,
-		MinVersion: tls.VersionTLS12,
-	}
+	tlsConfig := imapTLSConfig(host)
 	opts := &gimapc.Options{
 		TLSConfig:   tlsConfig,
 		WordDecoder: &mime.WordDecoder{CharsetReader: charset.Reader},

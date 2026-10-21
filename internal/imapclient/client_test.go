@@ -1,6 +1,8 @@
 package imapclient
 
 import (
+	"crypto/tls"
+	"slices"
 	"testing"
 	"time"
 )
@@ -221,5 +223,28 @@ func TestValidateUIDs(t *testing.T) {
 	}
 	if err := validateUIDs([]uint32{0}); err == nil {
 		t.Fatal("zero UID accepted")
+	}
+}
+
+func TestIMAPTLSConfig(t *testing.T) {
+	// China Mobile mail gateways reject a ClientHello without a static RSA
+	// key exchange suite.
+	for _, host := range []string{"imap.139.com", "IMAP.139.com.", "imap.mail.10086.cn"} {
+		cfg := imapTLSConfig(host)
+		if cfg.ServerName != host || cfg.MinVersion != tls.VersionTLS12 {
+			t.Errorf("%s: ServerName %q, MinVersion %#x", host, cfg.ServerName, cfg.MinVersion)
+		}
+		if !slices.Contains(cfg.CipherSuites, tls.TLS_RSA_WITH_AES_128_GCM_SHA256) {
+			t.Errorf("%s: static RSA suite missing from %v", host, cfg.CipherSuites)
+		}
+		if cfg.CipherSuites[0] != tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 {
+			t.Errorf("%s: ECDHE must stay ahead of static RSA, got %v", host, cfg.CipherSuites)
+		}
+	}
+	// Every other host keeps Go's default suite list.
+	for _, host := range []string{"imap.gmail.com", "imap.example.com", "imap.139.com.example.net"} {
+		if suites := imapTLSConfig(host).CipherSuites; suites != nil {
+			t.Errorf("%s: default suite list replaced with %v", host, suites)
+		}
 	}
 }
