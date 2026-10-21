@@ -192,6 +192,23 @@ paths:
         '202': { description: Scope reconciliation queued. }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /accounts/discover:
+    post:
+      operationId: discoverAccount
+      tags: [accounts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DiscoveryRequest' }
+      responses:
+        '200':
+          description: Best-effort connection settings for the email domain.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DiscoveryResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
   /accounts/{id}/test:
     parameters:
       - $ref: '#/components/parameters/AccountID'
@@ -1160,7 +1177,6 @@ components:
         id: { type: string, format: uuid }
         name: { type: string }
         email: { type: string }
-        color: { type: string }
         provider: { type: string }
         username: { type: string }
         authType: { type: string, enum: [password, oauth2] }
@@ -1174,6 +1190,8 @@ components:
         pop3Security: { type: string, enum: [implicit_tls, starttls, none] }
         smtpAddr: { type: string }
         smtpSecurity: { type: string, enum: [implicit_tls, starttls, none] }
+        smtpUsername: { type: string }
+        hasSmtpPassword: { type: boolean }
         smtpHeloHostname: { type: string }
         syncEnabled: { type: boolean }
         initialSyncRange: { type: string, enum: [all, 1d, 3d, 1w, 1m, 1y] }
@@ -1188,13 +1206,12 @@ components:
         identities:
           type: array
           items: { $ref: '#/components/schemas/Identity' }
-      required: [id, name, email, color, provider, username, authType, receiveProtocol, syncEnabled, initialSyncRange, downloadScope, sentCopyMode, state, createdAt]
+      required: [id, name, email, provider, username, authType, receiveProtocol, syncEnabled, initialSyncRange, downloadScope, sentCopyMode, state, createdAt]
     AccountInput:
       type: object
       properties:
         name: { type: string }
         email: { type: string, format: email }
-        color: { type: string }
         provider: { type: string }
         username: { type: string }
         authType: { type: string, enum: [password, oauth2] }
@@ -1208,6 +1225,8 @@ components:
         pop3Security: { type: string, enum: [implicit_tls, starttls, none] }
         smtpAddr: { type: string }
         smtpSecurity: { type: string, enum: [implicit_tls, starttls, none] }
+        smtpUsername: { type: string }
+        smtpPassword: { type: string }
         smtpHeloHostname: { type: string }
         syncEnabled: { type: boolean }
         initialSyncRange: { type: string, enum: [all, 1d, 3d, 1w, 1m, 1y] }
@@ -1216,6 +1235,29 @@ components:
         pop3LeaveOnServer: { type: boolean }
         pop3DeleteOnServer: { type: boolean }
       required: [name, email, username, authType, receiveProtocol]
+    DiscoveryRequest:
+      type: object
+      properties:
+        email: { type: string, format: email }
+      required: [email]
+    DiscoveryEndpoint:
+      type: object
+      properties:
+        addr: { type: string }
+        security: { type: string, enum: [implicit_tls, starttls, none] }
+      required: [addr, security]
+    DiscoveryResult:
+      type: object
+      properties:
+        domain: { type: string }
+        provider: { type: string }
+        source: { type: string, enum: [registry, domain, autodiscover, autoconfig, none] }
+        oauthProvider: { type: string, enum: [google, microsoft] }
+        receiveProtocol: { type: string, enum: [imap, pop3] }
+        imap: { $ref: '#/components/schemas/DiscoveryEndpoint' }
+        pop3: { $ref: '#/components/schemas/DiscoveryEndpoint' }
+        smtp: { $ref: '#/components/schemas/DiscoveryEndpoint' }
+      required: [domain, provider, source, receiveProtocol]
     ConnectionTestResult:
       type: object
       properties:
@@ -1354,7 +1396,6 @@ components:
         isArchive: { type: boolean }
         accountEmail: { type: string }
         accountName: { type: string }
-        accountColor: { type: string }
         mailboxPath: { type: string }
         mailboxRole: { type: string }
       required: [id, accountId, mailboxId, subject, receivedAt, size, unread, marked, hasAttachments, bodyState]

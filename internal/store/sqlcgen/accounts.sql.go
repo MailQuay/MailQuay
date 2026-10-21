@@ -25,26 +25,27 @@ func (q *Queries) CountAccounts(ctx context.Context) (int64, error) {
 
 const createAccount = `-- name: CreateAccount :one
 INSERT INTO accounts (
-    id, name, email, color, provider, username, auth_type, password_enc,
+    id, name, email, provider, username, auth_type, password_enc,
     oauth_provider, oauth_scopes, oauth_refresh_enc, receive_protocol,
     imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security,
+    smtp_username, smtp_password_enc,
     smtp_helo_hostname, sync_enabled, initial_sync_range, download_scope,
     initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8,
-    $9, $10, $11, $12,
-    $13, $14, $15, $16, $17, $18,
-    $19, $20, $21, $22,
-    $23, $24, $25, $26
+    $1, $2, $3, $4, $5, $6, $7,
+    $8, $9, $10, $11,
+    $12, $13, $14, $15, $16, $17,
+    $18, $19,
+    $20, $21, $22, $23,
+    $24, $25, $26, $27
 )
-RETURNING id, name, email, color, provider, username, auth_type, password_enc, oauth_provider, oauth_scopes, oauth_refresh_enc, receive_protocol, imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security, smtp_helo_hostname, sync_enabled, sync_state, last_error, initial_sync_range, download_scope, initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server, deleted_at, created_at, updated_at
+RETURNING id, name, email, provider, username, auth_type, password_enc, oauth_provider, oauth_scopes, oauth_refresh_enc, receive_protocol, imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security, smtp_helo_hostname, sync_enabled, sync_state, last_error, initial_sync_range, download_scope, initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server, deleted_at, created_at, updated_at, smtp_username, smtp_password_enc
 `
 
 type CreateAccountParams struct {
 	ID                  uuid.UUID  `json:"id"`
 	Name                string     `json:"name"`
 	Email               string     `json:"email"`
-	Color               string     `json:"color"`
 	Provider            string     `json:"provider"`
 	Username            string     `json:"username"`
 	AuthType            string     `json:"auth_type"`
@@ -59,6 +60,8 @@ type CreateAccountParams struct {
 	Pop3Security        string     `json:"pop3_security"`
 	SmtpAddr            *string    `json:"smtp_addr"`
 	SmtpSecurity        string     `json:"smtp_security"`
+	SmtpUsername        *string    `json:"smtp_username"`
+	SmtpPasswordEnc     []byte     `json:"smtp_password_enc"`
 	SmtpHeloHostname    string     `json:"smtp_helo_hostname"`
 	SyncEnabled         bool       `json:"sync_enabled"`
 	InitialSyncRange    string     `json:"initial_sync_range"`
@@ -74,7 +77,6 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (A
 		arg.ID,
 		arg.Name,
 		arg.Email,
-		arg.Color,
 		arg.Provider,
 		arg.Username,
 		arg.AuthType,
@@ -89,6 +91,8 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (A
 		arg.Pop3Security,
 		arg.SmtpAddr,
 		arg.SmtpSecurity,
+		arg.SmtpUsername,
+		arg.SmtpPasswordEnc,
 		arg.SmtpHeloHostname,
 		arg.SyncEnabled,
 		arg.InitialSyncRange,
@@ -103,7 +107,6 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (A
 		&i.ID,
 		&i.Name,
 		&i.Email,
-		&i.Color,
 		&i.Provider,
 		&i.Username,
 		&i.AuthType,
@@ -131,12 +134,14 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (A
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SmtpUsername,
+		&i.SmtpPasswordEnc,
 	)
 	return i, err
 }
 
 const getAccount = `-- name: GetAccount :one
-SELECT id, name, email, color, provider, username, auth_type, password_enc, oauth_provider, oauth_scopes, oauth_refresh_enc, receive_protocol, imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security, smtp_helo_hostname, sync_enabled, sync_state, last_error, initial_sync_range, download_scope, initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server, deleted_at, created_at, updated_at FROM accounts WHERE id = $1
+SELECT id, name, email, provider, username, auth_type, password_enc, oauth_provider, oauth_scopes, oauth_refresh_enc, receive_protocol, imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security, smtp_helo_hostname, sync_enabled, sync_state, last_error, initial_sync_range, download_scope, initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server, deleted_at, created_at, updated_at, smtp_username, smtp_password_enc FROM accounts WHERE id = $1
 `
 
 func (q *Queries) GetAccount(ctx context.Context, id uuid.UUID) (Account, error) {
@@ -146,7 +151,6 @@ func (q *Queries) GetAccount(ctx context.Context, id uuid.UUID) (Account, error)
 		&i.ID,
 		&i.Name,
 		&i.Email,
-		&i.Color,
 		&i.Provider,
 		&i.Username,
 		&i.AuthType,
@@ -174,6 +178,8 @@ func (q *Queries) GetAccount(ctx context.Context, id uuid.UUID) (Account, error)
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SmtpUsername,
+		&i.SmtpPasswordEnc,
 	)
 	return i, err
 }
@@ -188,7 +194,7 @@ func (q *Queries) HardDeleteAccount(ctx context.Context, id uuid.UUID) error {
 }
 
 const listAccounts = `-- name: ListAccounts :many
-SELECT id, name, email, color, provider, username, auth_type, password_enc, oauth_provider, oauth_scopes, oauth_refresh_enc, receive_protocol, imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security, smtp_helo_hostname, sync_enabled, sync_state, last_error, initial_sync_range, download_scope, initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server, deleted_at, created_at, updated_at FROM accounts WHERE deleted_at IS NULL ORDER BY created_at, id
+SELECT id, name, email, provider, username, auth_type, password_enc, oauth_provider, oauth_scopes, oauth_refresh_enc, receive_protocol, imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security, smtp_helo_hostname, sync_enabled, sync_state, last_error, initial_sync_range, download_scope, initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server, deleted_at, created_at, updated_at, smtp_username, smtp_password_enc FROM accounts WHERE deleted_at IS NULL ORDER BY created_at, id
 `
 
 func (q *Queries) ListAccounts(ctx context.Context) ([]Account, error) {
@@ -204,7 +210,6 @@ func (q *Queries) ListAccounts(ctx context.Context) ([]Account, error) {
 			&i.ID,
 			&i.Name,
 			&i.Email,
-			&i.Color,
 			&i.Provider,
 			&i.Username,
 			&i.AuthType,
@@ -232,6 +237,8 @@ func (q *Queries) ListAccounts(ctx context.Context) ([]Account, error) {
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.SmtpUsername,
+			&i.SmtpPasswordEnc,
 		); err != nil {
 			return nil, err
 		}
@@ -244,7 +251,7 @@ func (q *Queries) ListAccounts(ctx context.Context) ([]Account, error) {
 }
 
 const listActiveAccounts = `-- name: ListActiveAccounts :many
-SELECT id, name, email, color, provider, username, auth_type, password_enc, oauth_provider, oauth_scopes, oauth_refresh_enc, receive_protocol, imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security, smtp_helo_hostname, sync_enabled, sync_state, last_error, initial_sync_range, download_scope, initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server, deleted_at, created_at, updated_at FROM accounts WHERE deleted_at IS NULL AND sync_enabled ORDER BY created_at, id
+SELECT id, name, email, provider, username, auth_type, password_enc, oauth_provider, oauth_scopes, oauth_refresh_enc, receive_protocol, imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security, smtp_helo_hostname, sync_enabled, sync_state, last_error, initial_sync_range, download_scope, initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server, deleted_at, created_at, updated_at, smtp_username, smtp_password_enc FROM accounts WHERE deleted_at IS NULL AND sync_enabled ORDER BY created_at, id
 `
 
 func (q *Queries) ListActiveAccounts(ctx context.Context) ([]Account, error) {
@@ -260,7 +267,6 @@ func (q *Queries) ListActiveAccounts(ctx context.Context) ([]Account, error) {
 			&i.ID,
 			&i.Name,
 			&i.Email,
-			&i.Color,
 			&i.Provider,
 			&i.Username,
 			&i.AuthType,
@@ -288,6 +294,8 @@ func (q *Queries) ListActiveAccounts(ctx context.Context) ([]Account, error) {
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.SmtpUsername,
+			&i.SmtpPasswordEnc,
 		); err != nil {
 			return nil, err
 		}
@@ -300,7 +308,7 @@ func (q *Queries) ListActiveAccounts(ctx context.Context) ([]Account, error) {
 }
 
 const listDeletedAccounts = `-- name: ListDeletedAccounts :many
-SELECT id, name, email, color, provider, username, auth_type, password_enc, oauth_provider, oauth_scopes, oauth_refresh_enc, receive_protocol, imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security, smtp_helo_hostname, sync_enabled, sync_state, last_error, initial_sync_range, download_scope, initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server, deleted_at, created_at, updated_at FROM accounts WHERE deleted_at IS NOT NULL ORDER BY deleted_at
+SELECT id, name, email, provider, username, auth_type, password_enc, oauth_provider, oauth_scopes, oauth_refresh_enc, receive_protocol, imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security, smtp_helo_hostname, sync_enabled, sync_state, last_error, initial_sync_range, download_scope, initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server, deleted_at, created_at, updated_at, smtp_username, smtp_password_enc FROM accounts WHERE deleted_at IS NOT NULL ORDER BY deleted_at
 `
 
 func (q *Queries) ListDeletedAccounts(ctx context.Context) ([]Account, error) {
@@ -316,7 +324,6 @@ func (q *Queries) ListDeletedAccounts(ctx context.Context) ([]Account, error) {
 			&i.ID,
 			&i.Name,
 			&i.Email,
-			&i.Color,
 			&i.Provider,
 			&i.Username,
 			&i.AuthType,
@@ -344,6 +351,8 @@ func (q *Queries) ListDeletedAccounts(ctx context.Context) ([]Account, error) {
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.SmtpUsername,
+			&i.SmtpPasswordEnc,
 		); err != nil {
 			return nil, err
 		}
@@ -395,24 +404,24 @@ func (q *Queries) SoftDeleteAccount(ctx context.Context, id uuid.UUID) error {
 
 const updateAccount = `-- name: UpdateAccount :one
 UPDATE accounts SET
-    name = $2, email = $3, color = $4,
-    username = $5, auth_type = $6, password_enc = $7,
-    oauth_provider = $8, oauth_scopes = $9, oauth_refresh_enc = $10,
-    receive_protocol = $11, imap_addr = $12, imap_security = $13,
-    pop3_addr = $14, pop3_security = $15, smtp_addr = $16, smtp_security = $17,
-    smtp_helo_hostname = $18, sync_enabled = $19,
-    initial_sync_range = $20, download_scope = $21, initial_sync_cutoff_at = $22,
-    sent_copy_mode = $23, pop3_leave_on_server = $24, pop3_delete_on_server = $25,
+    name = $2, email = $3,
+    username = $4, auth_type = $5, password_enc = $6,
+    oauth_provider = $7, oauth_scopes = $8, oauth_refresh_enc = $9,
+    receive_protocol = $10, imap_addr = $11, imap_security = $12,
+    pop3_addr = $13, pop3_security = $14, smtp_addr = $15, smtp_security = $16,
+    smtp_username = $17, smtp_password_enc = $18,
+    smtp_helo_hostname = $19, sync_enabled = $20,
+    initial_sync_range = $21, download_scope = $22, initial_sync_cutoff_at = $23,
+    sent_copy_mode = $24, pop3_leave_on_server = $25, pop3_delete_on_server = $26,
     updated_at = now()
 WHERE id = $1
-RETURNING id, name, email, color, provider, username, auth_type, password_enc, oauth_provider, oauth_scopes, oauth_refresh_enc, receive_protocol, imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security, smtp_helo_hostname, sync_enabled, sync_state, last_error, initial_sync_range, download_scope, initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server, deleted_at, created_at, updated_at
+RETURNING id, name, email, provider, username, auth_type, password_enc, oauth_provider, oauth_scopes, oauth_refresh_enc, receive_protocol, imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security, smtp_helo_hostname, sync_enabled, sync_state, last_error, initial_sync_range, download_scope, initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server, deleted_at, created_at, updated_at, smtp_username, smtp_password_enc
 `
 
 type UpdateAccountParams struct {
 	ID                  uuid.UUID  `json:"id"`
 	Name                string     `json:"name"`
 	Email               string     `json:"email"`
-	Color               string     `json:"color"`
 	Username            string     `json:"username"`
 	AuthType            string     `json:"auth_type"`
 	PasswordEnc         []byte     `json:"password_enc"`
@@ -426,6 +435,8 @@ type UpdateAccountParams struct {
 	Pop3Security        string     `json:"pop3_security"`
 	SmtpAddr            *string    `json:"smtp_addr"`
 	SmtpSecurity        string     `json:"smtp_security"`
+	SmtpUsername        *string    `json:"smtp_username"`
+	SmtpPasswordEnc     []byte     `json:"smtp_password_enc"`
 	SmtpHeloHostname    string     `json:"smtp_helo_hostname"`
 	SyncEnabled         bool       `json:"sync_enabled"`
 	InitialSyncRange    string     `json:"initial_sync_range"`
@@ -441,7 +452,6 @@ func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) (A
 		arg.ID,
 		arg.Name,
 		arg.Email,
-		arg.Color,
 		arg.Username,
 		arg.AuthType,
 		arg.PasswordEnc,
@@ -455,6 +465,8 @@ func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) (A
 		arg.Pop3Security,
 		arg.SmtpAddr,
 		arg.SmtpSecurity,
+		arg.SmtpUsername,
+		arg.SmtpPasswordEnc,
 		arg.SmtpHeloHostname,
 		arg.SyncEnabled,
 		arg.InitialSyncRange,
@@ -469,7 +481,6 @@ func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) (A
 		&i.ID,
 		&i.Name,
 		&i.Email,
-		&i.Color,
 		&i.Provider,
 		&i.Username,
 		&i.AuthType,
@@ -497,6 +508,8 @@ func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) (A
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SmtpUsername,
+		&i.SmtpPasswordEnc,
 	)
 	return i, err
 }

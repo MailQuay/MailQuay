@@ -124,6 +124,25 @@ func TestParseMultipart(t *testing.T) {
 	}
 }
 
+func TestParseKeepInlineImages(t *testing.T) {
+	parsed, err := mailmime.Parse([]byte(multipartMessage), mailmime.Options{KeepInlineImages: true})
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	for _, att := range parsed.Attachments {
+		switch att.ContentType {
+		case "image/png":
+			if len(att.Data) != 8 {
+				t.Errorf("inline image data = %d bytes, want 8", len(att.Data))
+			}
+		default:
+			if att.Data != nil {
+				t.Errorf("%s: non-inline data should be omitted, got %d bytes", att.PartPath, len(att.Data))
+			}
+		}
+	}
+}
+
 func TestParseAttachmentDataOptions(t *testing.T) {
 	parsed, err := mailmime.Parse([]byte(multipartMessage), mailmime.Options{})
 	if err != nil {

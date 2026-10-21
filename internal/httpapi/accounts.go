@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/mailquay/mailquay/internal/account"
+	"github.com/mailquay/mailquay/internal/discovery"
 	"github.com/mailquay/mailquay/internal/httpapi/oapi"
 )
 
@@ -141,6 +142,41 @@ func (s *Server) TestAccount(w http.ResponseWriter, r *http.Request, id oapi.Acc
 	})
 }
 
+func (s *Server) DiscoverAccount(w http.ResponseWriter, r *http.Request) {
+	var body oapi.DiscoveryRequest
+	if err := decodeJSON(r, &body); err != nil {
+		s.error(w, r, http.StatusBadRequest, "invalid_request", "Malformed request body.")
+		return
+	}
+	result, err := discovery.Discover(r.Context(), string(body.Email))
+	if err != nil {
+		s.error(w, r, http.StatusBadRequest, "invalid_email", "Enter a valid email address.")
+		return
+	}
+	out := oapi.DiscoveryResult{
+		Domain: result.Domain, Provider: result.Provider,
+		Source:          oapi.DiscoveryResultSource(result.Source),
+		ReceiveProtocol: oapi.DiscoveryResultReceiveProtocol(result.ReceiveProtocol),
+		Imap:            mapDiscoveryEndpoint(result.IMAP),
+		Pop3:            mapDiscoveryEndpoint(result.POP3),
+		Smtp:            mapDiscoveryEndpoint(result.SMTP),
+	}
+	if result.OAuthProvider != "" {
+		provider := oapi.DiscoveryResultOauthProvider(result.OAuthProvider)
+		out.OauthProvider = &provider
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func mapDiscoveryEndpoint(endpoint *discovery.Endpoint) *oapi.DiscoveryEndpoint {
+	if endpoint == nil {
+		return nil
+	}
+	return &oapi.DiscoveryEndpoint{
+		Addr: endpoint.Addr, Security: oapi.DiscoveryEndpointSecurity(endpoint.Security),
+	}
+}
+
 func (s *Server) SyncAccount(w http.ResponseWriter, r *http.Request, id oapi.AccountID) {
 	accountID, ok := toUUID(id)
 	if !ok {
@@ -164,11 +200,13 @@ func accountInput(body oapi.AccountInput) account.Input {
 	in := account.Input{
 		Name: body.Name, Email: string(body.Email), Username: body.Username,
 		AuthType: authType, ReceiveProtocol: receive,
-		Color: derefString(body.Color), Provider: derefString(body.Provider),
+		Provider: derefString(body.Provider),
 		Password: derefString(body.Password), OAuthProvider: derefEnum(body.OauthProvider),
 		OAuthRefreshToken: derefString(body.OauthRefreshToken),
 		IMAPAddr:          derefString(body.ImapAddr), POP3Addr: derefString(body.Pop3Addr),
 		SMTPAddr: derefString(body.SmtpAddr), SMTPHeloHostname: derefString(body.SmtpHeloHostname),
+		SMTPUsername:       derefString(body.SmtpUsername),
+		SMTPPassword:       derefString(body.SmtpPassword),
 		SyncEnabled:        boolValue(body.SyncEnabled, true),
 		InitialSyncRange:   derefString((*string)(body.InitialSyncRange)),
 		DownloadScope:      derefString((*string)(body.DownloadScope)),

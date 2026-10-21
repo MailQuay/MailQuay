@@ -21,13 +21,23 @@ func (q *Queries) DeleteAttachmentsByMessage(ctx context.Context, messageID uuid
 }
 
 const deleteAttachmentsForAccount = `-- name: DeleteAttachmentsForAccount :exec
-DELETE FROM attachments WHERE message_id IN (
+DELETE FROM attachments
+WHERE message_id IN (
     SELECT id FROM messages WHERE account_id = $1 AND NOT local_flag AND preserved_at IS NULL
+)
+AND (
+    NOT $2::boolean
+    OR (disposition <> 'inline' AND content_id = '')
 )
 `
 
-func (q *Queries) DeleteAttachmentsForAccount(ctx context.Context, accountID uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteAttachmentsForAccount, accountID)
+type DeleteAttachmentsForAccountParams struct {
+	AccountID  uuid.UUID `json:"account_id"`
+	KeepInline bool      `json:"keep_inline"`
+}
+
+func (q *Queries) DeleteAttachmentsForAccount(ctx context.Context, arg DeleteAttachmentsForAccountParams) error {
+	_, err := q.db.Exec(ctx, deleteAttachmentsForAccount, arg.AccountID, arg.KeepInline)
 	return err
 }
 

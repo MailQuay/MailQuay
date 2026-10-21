@@ -29,7 +29,6 @@ var ErrNotFound = errors.New("account not found")
 type Input struct {
 	Name               string
 	Email              string
-	Color              string
 	Provider           string
 	Username           string
 	AuthType           string
@@ -43,6 +42,8 @@ type Input struct {
 	POP3Security       string
 	SMTPAddr           string
 	SMTPSecurity       string
+	SMTPUsername       string
+	SMTPPassword       string
 	SMTPHeloHostname   string
 	SyncEnabled        bool
 	InitialSyncRange   string
@@ -54,9 +55,11 @@ type Input struct {
 
 // Credentials holds decrypted account secrets.
 type Credentials struct {
-	Username    string
-	Password    string
-	AccessToken string
+	Username     string
+	Password     string
+	AccessToken  string
+	SMTPUsername string
+	SMTPPassword string
 }
 
 // TestResult reports connection checks.
@@ -116,7 +119,6 @@ func (s *Service) Create(ctx context.Context, in Input) (sqlcgen.Account, error)
 		ID:                  id,
 		Name:                normalized.Name,
 		Email:               normalized.Email,
-		Color:               normalized.Color,
 		Provider:            normalized.Provider,
 		Username:            normalized.Username,
 		AuthType:            normalized.AuthType,
@@ -129,6 +131,7 @@ func (s *Service) Create(ctx context.Context, in Input) (sqlcgen.Account, error)
 		Pop3Security:        normalized.POP3Security,
 		SmtpAddr:            nullable(normalized.SMTPAddr),
 		SmtpSecurity:        normalized.SMTPSecurity,
+		SmtpUsername:        nullable(normalized.SMTPUsername),
 		SmtpHeloHostname:    normalized.SMTPHeloHostname,
 		SyncEnabled:         normalized.SyncEnabled,
 		InitialSyncRange:    normalized.InitialSyncRange,
@@ -144,6 +147,13 @@ func (s *Service) Create(ctx context.Context, in Input) (sqlcgen.Account, error)
 			return sqlcgen.Account{}, err
 		}
 		params.PasswordEnc = enc
+	}
+	if in.SMTPPassword != "" {
+		enc, err := s.cipher.EncryptString(in.SMTPPassword, smtpPasswordAAD(id))
+		if err != nil {
+			return sqlcgen.Account{}, err
+		}
+		params.SmtpPasswordEnc = enc
 	}
 	if in.AuthType == "oauth2" && in.OAuthRefreshToken != "" {
 		enc, err := s.cipher.EncryptString(in.OAuthRefreshToken, oauthAAD(id))
@@ -185,7 +195,6 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in Input) (sqlcgen.A
 		ID:                  id,
 		Name:                normalized.Name,
 		Email:               normalized.Email,
-		Color:               normalized.Color,
 		Username:            normalized.Username,
 		AuthType:            normalized.AuthType,
 		PasswordEnc:         existing.PasswordEnc,
@@ -199,6 +208,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in Input) (sqlcgen.A
 		Pop3Security:        normalized.POP3Security,
 		SmtpAddr:            nullable(normalized.SMTPAddr),
 		SmtpSecurity:        normalized.SMTPSecurity,
+		SmtpUsername:        nullable(normalized.SMTPUsername),
 		SmtpHeloHostname:    normalized.SMTPHeloHostname,
 		SyncEnabled:         normalized.SyncEnabled,
 		InitialSyncRange:    normalized.InitialSyncRange,
@@ -224,6 +234,16 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in Input) (sqlcgen.A
 			return sqlcgen.Account{}, err
 		}
 		params.OauthRefreshEnc = enc
+	}
+	if normalized.SMTPUsername == "" {
+		params.SmtpPasswordEnc = nil
+	}
+	if in.SMTPPassword != "" {
+		enc, err := s.cipher.EncryptString(in.SMTPPassword, smtpPasswordAAD(id))
+		if err != nil {
+			return sqlcgen.Account{}, err
+		}
+		params.SmtpPasswordEnc = enc
 	}
 	updated, err := s.store.UpdateAccount(ctx, params)
 	if err != nil {
@@ -264,7 +284,10 @@ func (s *Service) Reconcile(ctx context.Context, id uuid.UUID) error {
 
 // Credentials decrypts the stored secret for protocol use.
 func (s *Service) Credentials(ctx context.Context, acct sqlcgen.Account) (Credentials, error) {
-	creds := Credentials{Username: acct.Username}
+	creds := Credentials{Username: acct.Username, SMTPUsername: acct.Username}
+	if acct.SmtpUsername != nil && strings.TrimSpace(*acct.SmtpUsername) != "" {
+		creds.SMTPUsername = strings.TrimSpace(*acct.SmtpUsername)
+	}
 	if acct.AuthType == "password" {
 		if len(acct.PasswordEnc) == 0 {
 			return creds, errors.New("account has no stored password")
@@ -274,6 +297,14 @@ func (s *Service) Credentials(ctx context.Context, acct sqlcgen.Account) (Creden
 			return creds, fmt.Errorf("decrypt password: %w", err)
 		}
 		creds.Password = password
+		creds.SMTPPassword = password
+		if len(acct.SmtpPasswordEnc) > 0 {
+			smtpPassword, err := s.cipher.DecryptString(acct.SmtpPasswordEnc, smtpPasswordAAD(acct.ID))
+			if err != nil {
+				return creds, fmt.Errorf("decrypt smtp password: %w", err)
+			}
+			creds.SMTPPassword = smtpPassword
+		}
 		return creds, nil
 	}
 	token, err := s.AccessToken(ctx, acct)
@@ -332,8 +363,8 @@ func (s *Service) Test(ctx context.Context, id uuid.UUID) (TestResult, error) {
 	}
 	if acct.SmtpAddr != nil && *acct.SmtpAddr != "" {
 		err := smtpclient.Test(ctx, smtpclient.Config{
-			Address: *acct.SmtpAddr, Security: acct.SmtpSecurity, Username: acct.Username,
-			Password: creds.Password, AccessToken: creds.AccessToken,
+			Address: *acct.SmtpAddr, Security: acct.SmtpSecurity, Username: creds.SMTPUsername,
+			Password: creds.SMTPPassword, AccessToken: creds.AccessToken,
 			HELOHostname: acct.SmtpHeloHostname, Timeout: timeout,
 		})
 		if err != nil {
@@ -348,6 +379,7 @@ func (s *Service) Test(ctx context.Context, id uuid.UUID) (TestResult, error) {
 func (s *Service) normalize(in Input, creating bool) (Input, error) {
 	in.Name = strings.TrimSpace(in.Name)
 	in.Username = strings.TrimSpace(in.Username)
+	in.SMTPUsername = strings.TrimSpace(in.SMTPUsername)
 	in.AuthType = defaultString(in.AuthType, "password")
 	in.ReceiveProtocol = defaultString(in.ReceiveProtocol, "imap")
 	in.IMAPSecurity = defaultString(in.IMAPSecurity, "implicit_tls")
@@ -357,7 +389,6 @@ func (s *Service) normalize(in Input, creating bool) (Input, error) {
 	in.DownloadScope = defaultString(in.DownloadScope, "full_no_attachments")
 	in.SentCopyMode = defaultString(in.SentCopyMode, "auto")
 	in.Provider = defaultString(in.Provider, "custom")
-	in.Color = defaultString(in.Color, "#f97316")
 	if in.Email == "" {
 		return in, errors.New("email is required")
 	}
@@ -471,8 +502,9 @@ func cutoff(v string) *time.Time {
 	return &t
 }
 
-func passwordAAD(id uuid.UUID) []byte { return []byte("account:" + id.String() + ":password") }
-func oauthAAD(id uuid.UUID) []byte    { return []byte("account:" + id.String() + ":oauth_refresh") }
+func passwordAAD(id uuid.UUID) []byte     { return []byte("account:" + id.String() + ":password") }
+func smtpPasswordAAD(id uuid.UUID) []byte { return []byte("account:" + id.String() + ":smtp_password") }
+func oauthAAD(id uuid.UUID) []byte        { return []byte("account:" + id.String() + ":oauth_refresh") }
 
 func nullable(s string) *string {
 	if s == "" {

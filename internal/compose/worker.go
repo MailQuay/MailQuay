@@ -120,8 +120,8 @@ func (s *Service) sendOne(ctx context.Context, outbox sqlcgen.Outbox) {
 		return
 	}
 	err = smtpclient.Send(ctx, smtpclient.Config{
-		Address: *acct.SmtpAddr, Security: acct.SmtpSecurity, Username: acct.Username,
-		Password: creds.Password, AccessToken: creds.AccessToken,
+		Address: *acct.SmtpAddr, Security: acct.SmtpSecurity, Username: creds.SMTPUsername,
+		Password: creds.SMTPPassword, AccessToken: creds.AccessToken,
 		HELOHostname: acct.SmtpHeloHostname, Timeout: 60 * time.Second,
 	}, ident.Email, recipients, raw)
 	if err != nil {

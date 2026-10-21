@@ -42,14 +42,18 @@ func (s *Service) runScopeReconcile(ctx context.Context, acct sqlcgen.Account) {
 		if err := s.store.ClearMessageBodyCache(ctx, sqlcgen.ClearMessageBodyCacheParams{AccountID: acct.ID}); err != nil {
 			s.logger.Debug("clear body cache", "account", acct.ID, "error", err)
 		}
-		if err := s.store.DeleteAttachmentsForAccount(ctx, acct.ID); err != nil {
+		if err := s.store.DeleteAttachmentsForAccount(ctx, sqlcgen.DeleteAttachmentsForAccountParams{
+			AccountID: acct.ID, KeepInline: false,
+		}); err != nil {
 			s.logger.Debug("clear attachments", "account", acct.ID, "error", err)
 		}
 	case "full_no_attachments":
 		if err := s.store.ClearMessageAttachmentCache(ctx, sqlcgen.ClearMessageAttachmentCacheParams{AccountID: acct.ID}); err != nil {
 			s.logger.Debug("clear attachment cache", "account", acct.ID, "error", err)
 		}
-		if err := s.store.DeleteAttachmentsForAccount(ctx, acct.ID); err != nil {
+		if err := s.store.DeleteAttachmentsForAccount(ctx, sqlcgen.DeleteAttachmentsForAccountParams{
+			AccountID: acct.ID, KeepInline: true,
+		}); err != nil {
 			s.logger.Debug("clear attachments", "account", acct.ID, "error", err)
 		}
 	}

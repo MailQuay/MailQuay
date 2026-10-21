@@ -105,10 +105,11 @@ flowchart TB
 
 账号字段:
 
-- 基础: `id`, `email`, `name`, `color`, `provider`.
+- 基础: `id`, `email`, `name`, `provider`.
 - 认证: `username`, `auth_type` (`password` 或 `oauth2`), `password_enc`, `oauth_provider`, `oauth_scopes`, `oauth_refresh_enc`.
 - 收信: `receive_protocol` (`imap` 或 `pop3`), `imap_addr`, `pop3_addr`.
 - 发信: `smtp_addr`, 可为空; 为空表示只收不发.
+- 发信凭据: `smtp_username`, `smtp_password_enc`, 为空时回退到账号的 `username` 和密码.
 - 连接: `imap_security`, `pop3_security`, `smtp_security`, `smtp_helo_hostname`.
 - 同步: 范围, 下载范围, 发送副本策略, 同步开关.
 
@@ -125,7 +126,8 @@ flowchart TB
 - 新增账号时选择收信协议; 选 IMAP 时填 `imap_addr`, `pop3_addr` 为空; 选 POP3 时相反. `smtp_addr` 可空.
 - 发件身份归属于账号, 不再有独立身份 ID; 账号下用邮箱地址作为身份键, 使用账号的 SMTP 配置发信.
 - 删除账号时同时删除账号上的加密密码, OAuth token 和身份; 默认保留的标记邮件按标记规则处理.
-- API 永远不返回密码或 token, 只返回 `hasPassword`, `hasOAuth` 等状态.
+- 收信和发信分别鉴权: IMAP/POP3 使用账号 `username` 和密码, SMTP 使用 `smtp_username` 和 SMTP 密码; 未单独设置时复用收信凭据.
+- API 永远不返回密码或 token, 只返回 `hasPassword`, `hasSmtpPassword`, `hasOAuth` 等状态.
 - 连接测试按账号 ID 执行, 使用已保存的地址和凭据, 不信任前端临时传入的主机或密码.
 
 凭据使用 AES-256-GCM 加密后入库. 主密钥来自 `MAILQUAY_SECRET_KEY`, 不写入数据库. 加密时使用账号 ID 作为附加认证数据, 防止密文被搬到其他账号. OAuth2 refresh token 只存一份, access token 只放在内存.
@@ -136,6 +138,15 @@ OAuth2 流程:
 2. 回调 `GET /api/v1/oauth/{provider}/callback` 校验 `state`, 用授权码换取 refresh token 和 access token.
 3. refresh token 写入账号的 `oauth_refresh_enc` 并加密; access token 只放在内存, 过期前刷新.
 4. IMAP, POP3 和 SMTP 按服务商能力使用 XOAUTH2, 每次连接前取有效 access token. POP3 的 OAuth 支持取决于服务商, 不支持时回退到应用专用密码.
+
+自动发现:
+
+- `POST /accounts/discover` 只接收邮箱地址, 返回建议的主机, 端口, 传输安全和 OAuth 服务商; 不校验密码, 也不创建账号.
+- 查找顺序: 内置服务商表, 域名 MX 记录识别托管平台, 域名的 `autodiscover` 和 `autoconfig` 端点.
+- `autodiscover` 与 `autoconfig` 并行请求, 只使用 HTTPS, 单个请求 4 秒超时, 响应体上限 1 MB, 不跟随非 HTTPS 重定向.
+- 内置表覆盖常见公共邮箱; 自定义域名的 Microsoft 365 和 Google Workspace 通过 MX 记录识别.
+- 识别到 Microsoft 或 Google 平台时返回 `oauthProvider`, 前端默认选择 OAuth2; 其他域名仍使用密码或应用专用密码.
+- 发现结果只是预填建议, 保存前由用户确认, 后端仍按账号输入重新校验主机和端口.
 
 内置服务商参数:
 
@@ -194,7 +205,7 @@ IDLE 连接:
 - 全局设置提供这两个默认值; 新增账号时预填, 单个账号可以覆盖. 修改设置只影响新账号, 已有账号在账号设置中单独修改.
 - `all` 处理选中文件夹的全部邮件; 其他范围只处理 cutoff 之后的邮件, 更早邮件保留在服务器, 打开时按需拉取.
 - `headers` 只缓存邮件头, 列表显示收发信人和主题; 正文和附件打开时联网拉取, 离线不可读.
-- `full_no_attachments` 缓存邮件头和正文, 附件打开时联网拉取; 这是默认值.
+- `full_no_attachments` 缓存邮件头和正文, 保留正文引用的 `cid:` 内嵌图片, 普通附件打开时联网拉取; 这是默认值.
 - `full_with_attachments` 缓存正文和附件, 可以离线阅读.
 - POP3 用 `TOP` 取头, 其余范围用 `RETR`; POP3 不支持部分拉取, 选 `full_no_attachments` 时仍下载整封但只保留文本部分, 附件打开时重新拉取.
 - 初始同步是后台任务, 进度写入 `tasks` 表并推送到前端, 不阻塞登录和已有邮件浏览.
@@ -205,7 +216,7 @@ IDLE 连接:
 - 已有账号修改范围或下载范围时, 立即写入 `scope_reconcile` 任务, 异步拉取或清理本地数据.
 - 扩大同步范围或下载范围: 补拉新增范围内的元数据, 正文或附件.
 - 缩小同步范围: 删除范围外邮件的本地元数据, 缓存和搜索文档; 不删除远端邮件.
-- 缩小下载范围: 删除不再需要的正文或附件缓存, 保留邮件头和元数据; 不删除远端邮件.
+- 缩小下载范围: 删除不再需要的正文或附件缓存, 保留邮件头, 元数据和正文内嵌图片; 不删除远端邮件.
 - 标记邮件, 本地保留邮件和本地归档不受清理影响, 始终保留完整内容.
 - 对账任务可中断续跑, 进度进入任务环; 失败显示红色并允许重试.
 
@@ -541,14 +552,16 @@ HTTP 层注意:
 - 写邮件窗口点击顶栏"写邮件"打开, 左上角发送按钮和下拉箭头打开身份选择; 身份列表跨账号按账号分组, 支持搜索.
 - 新窗口模式打开独立 `/compose` 页面, 草稿 ID 通过 `window.name` 传递, 跨窗口草稿同步和窗口聚焦使用 `BroadcastChannel`; 不使用路径参数或查询参数.
 - 回复, 转发, 标记, 本地归档, 删除放在阅读器顶部, 不放在全局顶栏; 全部回复放在回复菜单.
-- 添加账号时先选择 IMAP 或 POP3, 再填写账号用户名, 密码或 OAuth, 对应协议地址, SMTP 地址和传输安全.
+- 添加账号使用引导流程: 先输入邮箱和密码, 自动发现服务器; 再确认收信协议和 SMTP 地址; 然后分别确认收信和发信凭据; 最后设置显示名称和同步范围.
+- 收信凭据和发信凭据默认都复用邮箱和密码, 可以分别修改; 编辑已有账号时同样可以单独更新 SMTP 用户名和密码.
+- 账号表单的邮箱和密码使用单行 `textarea` 渲染, 并带密码管理器忽略属性, 避免浏览器自动填充和扩展弹窗把邮箱账号当成登录凭据.
 - TanStack Query 持有所有服务端状态. 组件不直接发请求, 统一走 `features/*/api.ts`.
 - Zustand 只保存界面状态: 当前账号与文件夹, 搜索条件, 侧边栏折叠, 选中邮件, 写邮件窗口, 当前身份, 主题和移动端视图.
 - SSE 事件只做缓存失效和局部更新, 不复制完整邮件对象.
 - 未读, 标记, 归档使用乐观更新, 失败时回滚并提示.
 - 邮件列表使用虚拟滚动, 阅读器正文在独立 iframe 中渲染.
 - HTML 邮件先经 DOMPurify 清洗, 再写入 `sandbox` iframe 的 `srcdoc`; 禁止脚本, 表单和顶层导航.
-- 远程图片默认阻止, 按发件人记住放行选择; 链接强制 `target="_blank"` 和 `rel="noopener noreferrer"`.
+- 远程图片默认阻止, 按发件人记住放行选择; `cid:` 内嵌图片从附件接口取回后转为 data URL 渲染; 链接强制 `target="_blank"` 和 `rel="noopener noreferrer"`.
 - 附件通过带会话的 API 下载, 文件名只用于展示, 响应头使用 `Content-Disposition: attachment`.
 - 任务环是按任务类型分色的多段圆环, 每类任务按工作量占比占用弧段, 段内按完成百分比填充; 没有任务时整环为白色.
 - 悬停或键盘聚焦任务环时向下展开任务面板, 列出运行中和待运行任务, 显示类型, 账号, 百分比和计数. 面板不阻塞页面, `Esc` 关闭.
@@ -599,14 +612,24 @@ HTTP 层注意:
 - 原始 MIME 不执行, 不渲染, 只解析.
 - 正文 HTML 清洗白名单: 保留排版标签, 去掉 `script`, `iframe`, `object`, `embed`, 事件属性和 `javascript:` URL.
 - iframe 使用 `sandbox="allow-popups allow-popups-to-escape-sandbox"`, 不带 `allow-scripts`, `allow-same-origin`, `allow-forms` 和 `allow-top-navigation`; 外部链接经过重写.
-- 默认阻止远程图片和外部样式, 图片地址改写为 `data-src`, 用户放行后再加载, 避免跟踪像素泄露 IP.
+- 默认阻止远程图片和外部样式, 图片地址改写为 `data-blocked-src`, 用户放行后再写入 `src`; CSP 的 `img-src` 允许这些放行后的远程图片, 未放行时不会产生请求.
+- 跟踪像素 (宽或高不超过 2px) 在阻止状态下直接移除, 不占位也不计入阻止数量.
+- 被阻止的小图标 (宽高都不超过 24px) 直接隐藏但仍计入阻止数量; 其他被阻止图片按原始尺寸显示虚线占位框.
+- HTTPS 页面把图片的 `http://` 地址升级为 `https://`, 避免混合内容拦截; HTTP 页面保持原地址.
+- 邮件自带的内联 `<style>` 块在移除 `@import`, 远程 `url()` 和可执行 CSS 后保留, 用于还原响应式布局和媒体查询.
+- 表格的 `align`, `valign`, `width`, `height`, `cellpadding`, `cellspacing`, `border` 和 `bgcolor` 属性属于布局语义, 清洗时保留, 只校验取值范围.
+- 表格的 `background` 属性改写为 `data-background-src`, 只有用户放行远程图片后才恢复为 `background`.
+- `<html>` 和 `<body>` 上的背景声明提升为 iframe 根样式, 并移除其中的远程资源地址.
+- `data:image/*` 内联图片直接渲染, 其他 `data:` URL 从图片和链接中移除.
+- 暗色模式把中性浅色背景压暗, 深色文字提亮, 高饱和和浅色强调背景保留; 文字颜色按最近的背景色判断, 图片不做反色.
 - 附件下载设置 `X-Content-Type-Options: nosniff`, 不内联渲染未知类型.
 - 解压和文件名处理限制长度, 拒绝路径分隔符和控制字符.
 - Bleve 索引包含邮件正文. 数据卷权限限制为运行用户, 容器以非 root 运行, 备份与 blob 同等视为敏感数据.
 
 ### 8.6 SSRF 与出站请求
 
-- 后端只连接用户配置的 IMAP/POP3/SMTP 主机和内置 OAuth 端点, 不提供任意 URL 抓取.
+- 后端只连接用户配置的 IMAP/POP3/SMTP 主机和内置 OAuth 端点.
+- 自动发现只访问由邮箱域名派生的 HTTPS 主机 (`autodiscover.<域名>`, `autoconfig.<域名>`), 不接受任意 URL.
 - 可选的图片代理默认关闭; 开启时解析目标地址并拒绝回环, 私网, 链路本地和云元数据地址.
 - OAuth 端点写死, 不从账号配置读取.
 

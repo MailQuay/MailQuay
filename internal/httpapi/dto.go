@@ -27,13 +27,15 @@ func mapAccount(a sqlcgen.Account, identities []sqlcgen.Identity) oapi.Account {
 		state = a.SyncState
 	}
 	out := oapi.Account{
-		Id: openapi_types.UUID(a.ID), Name: a.Name, Email: a.Email, Color: a.Color, Provider: a.Provider,
+		Id: openapi_types.UUID(a.ID), Name: a.Name, Email: a.Email, Provider: a.Provider,
 		Username: a.Username, AuthType: oapi.AccountAuthType(a.AuthType),
 		HasPassword: boolPtr(len(a.PasswordEnc) > 0), HasOAuth: boolPtr(len(a.OauthRefreshEnc) > 0),
 		ReceiveProtocol:  oapi.AccountReceiveProtocol(a.ReceiveProtocol),
 		ImapSecurity:     secPtr(oapi.AccountImapSecurity(a.ImapSecurity)),
 		Pop3Security:     secPtr(oapi.AccountPop3Security(a.Pop3Security)),
 		SmtpSecurity:     secPtr(oapi.AccountSmtpSecurity(a.SmtpSecurity)),
+		SmtpUsername:     a.SmtpUsername,
+		HasSmtpPassword:  boolPtr(len(a.SmtpPasswordEnc) > 0),
 		SmtpHeloHostname: &a.SmtpHeloHostname, SyncEnabled: a.SyncEnabled,
 		InitialSyncRange:  oapi.AccountInitialSyncRange(a.InitialSyncRange),
 		DownloadScope:     oapi.AccountDownloadScope(a.DownloadScope),
@@ -145,7 +147,7 @@ func mapMessageDetail(m sqlcgen.Message) oapi.MessageDetail {
 		HasAttachments: summary.HasAttachments, BodyState: summary.BodyState,
 		AttachmentsState: summary.AttachmentsState, Preserved: summary.Preserved,
 		Snippet: summary.Snippet, AccountEmail: summary.AccountEmail, AccountName: summary.AccountName,
-		AccountColor: summary.AccountColor, MailboxPath: summary.MailboxPath, MailboxRole: summary.MailboxRole,
+		MailboxPath: summary.MailboxPath, MailboxRole: summary.MailboxRole,
 		MessageIdHeader: strPtr(m.MessageIDHeader), InReplyTo: strPtr(m.InReplyTo),
 	}
 	refs := m.ReferencesList

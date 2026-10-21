@@ -14,8 +14,13 @@ SELECT * FROM attachments WHERE message_id = $1 AND id = $2;
 DELETE FROM attachments WHERE message_id = $1;
 
 -- name: DeleteAttachmentsForAccount :exec
-DELETE FROM attachments WHERE message_id IN (
-    SELECT id FROM messages WHERE account_id = $1 AND NOT local_flag AND preserved_at IS NULL
+DELETE FROM attachments
+WHERE message_id IN (
+    SELECT id FROM messages WHERE account_id = sqlc.arg(account_id) AND NOT local_flag AND preserved_at IS NULL
+)
+AND (
+    NOT sqlc.arg(keep_inline)::boolean
+    OR (disposition <> 'inline' AND content_id = '')
 );
 
 -- name: ListReferencedBlobs :many

@@ -158,6 +158,34 @@ const (
 	ConcurrencySettingsModeManual ConcurrencySettingsMode = "manual"
 )
 
+// Defines values for DiscoveryEndpointSecurity.
+const (
+	DiscoveryEndpointSecurityImplicitTls DiscoveryEndpointSecurity = "implicit_tls"
+	DiscoveryEndpointSecurityNone        DiscoveryEndpointSecurity = "none"
+	DiscoveryEndpointSecurityStarttls    DiscoveryEndpointSecurity = "starttls"
+)
+
+// Defines values for DiscoveryResultOauthProvider.
+const (
+	DiscoveryResultOauthProviderGoogle    DiscoveryResultOauthProvider = "google"
+	DiscoveryResultOauthProviderMicrosoft DiscoveryResultOauthProvider = "microsoft"
+)
+
+// Defines values for DiscoveryResultReceiveProtocol.
+const (
+	Imap DiscoveryResultReceiveProtocol = "imap"
+	Pop3 DiscoveryResultReceiveProtocol = "pop3"
+)
+
+// Defines values for DiscoveryResultSource.
+const (
+	DiscoveryResultSourceAutoconfig   DiscoveryResultSource = "autoconfig"
+	DiscoveryResultSourceAutodiscover DiscoveryResultSource = "autodiscover"
+	DiscoveryResultSourceDomain       DiscoveryResultSource = "domain"
+	DiscoveryResultSourceNone         DiscoveryResultSource = "none"
+	DiscoveryResultSourceRegistry     DiscoveryResultSource = "registry"
+)
+
 // Defines values for DraftStatus.
 const (
 	DraftStatusCopyFailed DraftStatus = "copy_failed"
@@ -362,8 +390,8 @@ const (
 
 // Defines values for OAuthProvider.
 const (
-	OAuthProviderGoogle    OAuthProvider = "google"
-	OAuthProviderMicrosoft OAuthProvider = "microsoft"
+	Google    OAuthProvider = "google"
+	Microsoft OAuthProvider = "microsoft"
 )
 
 // Defines values for ListMessagesParamsView.
@@ -385,12 +413,12 @@ const (
 // Account defines model for Account.
 type Account struct {
 	AuthType            AccountAuthType         `json:"authType"`
-	Color               string                  `json:"color"`
 	CreatedAt           time.Time               `json:"createdAt"`
 	DownloadScope       AccountDownloadScope    `json:"downloadScope"`
 	Email               string                  `json:"email"`
 	HasOAuth            *bool                   `json:"hasOAuth,omitempty"`
 	HasPassword         *bool                   `json:"hasPassword,omitempty"`
+	HasSmtpPassword     *bool                   `json:"hasSmtpPassword,omitempty"`
 	Id                  openapi_types.UUID      `json:"id"`
 	Identities          *[]Identity             `json:"identities,omitempty"`
 	ImapAddr            *string                 `json:"imapAddr,omitempty"`
@@ -410,6 +438,7 @@ type Account struct {
 	SmtpAddr            *string                 `json:"smtpAddr,omitempty"`
 	SmtpHeloHostname    *string                 `json:"smtpHeloHostname,omitempty"`
 	SmtpSecurity        *AccountSmtpSecurity    `json:"smtpSecurity,omitempty"`
+	SmtpUsername        *string                 `json:"smtpUsername,omitempty"`
 	State               AccountState            `json:"state"`
 	SyncEnabled         bool                    `json:"syncEnabled"`
 	Username            string                  `json:"username"`
@@ -445,7 +474,6 @@ type AccountState string
 // AccountInput defines model for AccountInput.
 type AccountInput struct {
 	AuthType           AccountInputAuthType          `json:"authType"`
-	Color              *string                       `json:"color,omitempty"`
 	DownloadScope      *AccountInputDownloadScope    `json:"downloadScope,omitempty"`
 	Email              openapi_types.Email           `json:"email"`
 	ImapAddr           *string                       `json:"imapAddr,omitempty"`
@@ -464,7 +492,9 @@ type AccountInput struct {
 	SentCopyMode       *AccountInputSentCopyMode     `json:"sentCopyMode,omitempty"`
 	SmtpAddr           *string                       `json:"smtpAddr,omitempty"`
 	SmtpHeloHostname   *string                       `json:"smtpHeloHostname,omitempty"`
+	SmtpPassword       *string                       `json:"smtpPassword,omitempty"`
 	SmtpSecurity       *AccountInputSmtpSecurity     `json:"smtpSecurity,omitempty"`
+	SmtpUsername       *string                       `json:"smtpUsername,omitempty"`
 	SyncEnabled        *bool                         `json:"syncEnabled,omitempty"`
 	Username           string                        `json:"username"`
 }
@@ -613,6 +643,41 @@ type DeleteQueueItem struct {
 	MessageId   openapi_types.UUID `json:"messageId"`
 	Status      string             `json:"status"`
 }
+
+// DiscoveryEndpoint defines model for DiscoveryEndpoint.
+type DiscoveryEndpoint struct {
+	Addr     string                    `json:"addr"`
+	Security DiscoveryEndpointSecurity `json:"security"`
+}
+
+// DiscoveryEndpointSecurity defines model for DiscoveryEndpoint.Security.
+type DiscoveryEndpointSecurity string
+
+// DiscoveryRequest defines model for DiscoveryRequest.
+type DiscoveryRequest struct {
+	Email openapi_types.Email `json:"email"`
+}
+
+// DiscoveryResult defines model for DiscoveryResult.
+type DiscoveryResult struct {
+	Domain          string                         `json:"domain"`
+	Imap            *DiscoveryEndpoint             `json:"imap,omitempty"`
+	OauthProvider   *DiscoveryResultOauthProvider  `json:"oauthProvider,omitempty"`
+	Pop3            *DiscoveryEndpoint             `json:"pop3,omitempty"`
+	Provider        string                         `json:"provider"`
+	ReceiveProtocol DiscoveryResultReceiveProtocol `json:"receiveProtocol"`
+	Smtp            *DiscoveryEndpoint             `json:"smtp,omitempty"`
+	Source          DiscoveryResultSource          `json:"source"`
+}
+
+// DiscoveryResultOauthProvider defines model for DiscoveryResult.OauthProvider.
+type DiscoveryResultOauthProvider string
+
+// DiscoveryResultReceiveProtocol defines model for DiscoveryResult.ReceiveProtocol.
+type DiscoveryResultReceiveProtocol string
+
+// DiscoveryResultSource defines model for DiscoveryResult.Source.
+type DiscoveryResultSource string
 
 // Draft defines model for Draft.
 type Draft struct {
@@ -775,7 +840,6 @@ type MessageBody struct {
 
 // MessageDetail defines model for MessageDetail.
 type MessageDetail struct {
-	AccountColor     *string             `json:"accountColor,omitempty"`
 	AccountEmail     *string             `json:"accountEmail,omitempty"`
 	AccountId        openapi_types.UUID  `json:"accountId"`
 	AccountName      *string             `json:"accountName,omitempty"`
@@ -816,7 +880,6 @@ type MessagePage struct {
 
 // MessageSummary defines model for MessageSummary.
 type MessageSummary struct {
-	AccountColor     *string             `json:"accountColor,omitempty"`
 	AccountEmail     *string             `json:"accountEmail,omitempty"`
 	AccountId        openapi_types.UUID  `json:"accountId"`
 	AccountName      *string             `json:"accountName,omitempty"`
@@ -1183,6 +1246,9 @@ type SearchMessagesParamsMode string
 // CreateAccountJSONRequestBody defines body for CreateAccount for application/json ContentType.
 type CreateAccountJSONRequestBody = AccountInput
 
+// DiscoverAccountJSONRequestBody defines body for DiscoverAccount for application/json ContentType.
+type DiscoverAccountJSONRequestBody = DiscoveryRequest
+
 // UpdateAccountJSONRequestBody defines body for UpdateAccount for application/json ContentType.
 type UpdateAccountJSONRequestBody = AccountInput
 
@@ -1239,6 +1305,9 @@ type ServerInterface interface {
 
 	// (POST /accounts)
 	CreateAccount(w http.ResponseWriter, r *http.Request)
+
+	// (POST /accounts/discover)
+	DiscoverAccount(w http.ResponseWriter, r *http.Request)
 
 	// (DELETE /accounts/{id})
 	DeleteAccount(w http.ResponseWriter, r *http.Request, id AccountID)
@@ -1429,6 +1498,11 @@ func (_ Unimplemented) ListAccounts(w http.ResponseWriter, r *http.Request) {
 
 // (POST /accounts)
 func (_ Unimplemented) CreateAccount(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /accounts/discover)
+func (_ Unimplemented) DiscoverAccount(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1755,6 +1829,20 @@ func (siw *ServerInterfaceWrapper) CreateAccount(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateAccount(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DiscoverAccount operation middleware
+func (siw *ServerInterfaceWrapper) DiscoverAccount(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DiscoverAccount(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3380,6 +3468,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/accounts", wrapper.CreateAccount)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/accounts/discover", wrapper.DiscoverAccount)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/accounts/{id}", wrapper.DeleteAccount)

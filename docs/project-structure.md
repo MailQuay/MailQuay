@@ -277,7 +277,7 @@ frontend/
 
 1. 侧边栏标题"邮件".
 2. 全局收藏夹分组: 可折叠, 默认展开; 条目为全部收件, 未读, 已发送, 发送中, 草稿, 垃圾箱, 已标记, 本地归档; 全局没有"其他".
-3. 邮箱账号列表: 每个账号一行, 显示头像或颜色圆点, 邮箱和未读计数; 默认折叠, 点击展开.
+3. 邮箱账号列表: 每个账号一行, 显示邮箱和未读计数; 默认折叠, 点击展开.
 4. 展开账号后重复显示系统文件夹: 收件箱, 未读, 已发送, 草稿, 垃圾箱, 其他.
 5. 不在系统文件夹中的 Junk, Archive, 服务商标签和自定义文件夹, 全部放入该账号的"其他"; 其他在该组最下面, 默认折叠.
 6. 底部: 同步状态和设置入口; 不放主题和登录用户菜单.
@@ -469,7 +469,7 @@ frontend/
 | --- | --- | --- |
 | `users` | `id`, `username`, `display_name`, `password_hash`, `locale`, `theme` | 单行, 所有者账号; 登录只用用户名和密码 |
 | `sessions` | `id`, `user_id`, `token_hash`, `expires_at`, `user_agent`, `last_seen_at` | 会话摘要, 不存明文令牌 |
-| `accounts` | `id`, `name`, `email`, `color`, `provider`, `username`, `auth_type`, `password_enc`, `oauth_provider`, `oauth_scopes`, `oauth_refresh_enc`, `receive_protocol`, `imap_addr`, `imap_security`, `pop3_addr`, `pop3_security`, `smtp_addr`, `smtp_security`, `smtp_helo_hostname`, `sync_enabled`, `initial_sync_range`, `download_scope`, `initial_sync_cutoff_at`, `sent_copy_mode`, `deleted_at` | 唯一 ID 化实体; 地址存 `host:port`; `smtp_addr` 可空; 删除时写 `deleted_at` |
+| `accounts` | `id`, `name`, `email`, `provider`, `username`, `auth_type`, `password_enc`, `oauth_provider`, `oauth_scopes`, `oauth_refresh_enc`, `receive_protocol`, `imap_addr`, `imap_security`, `pop3_addr`, `pop3_security`, `smtp_addr`, `smtp_security`, `smtp_username`, `smtp_password_enc`, `smtp_helo_hostname`, `sync_enabled`, `initial_sync_range`, `download_scope`, `initial_sync_cutoff_at`, `sent_copy_mode`, `deleted_at` | 唯一 ID 化实体; 地址存 `host:port`; `smtp_addr` 可空; 删除时写 `deleted_at` |
 | `identities` | `account_id`, `email`, `name`, `organization`, `reply_to`, `bcc`, `signature_html`, `signature_text`, `signature_mode`, `is_default` | 发件身份属于账号, 主键为 `(account_id, email)`; 使用账号 SMTP 发信; `signature_mode` 为 `all`, `new`, `reply`, `forward`, `none` |
 | `mailboxes` | `id`, `account_id`, `path`, `name`, `delimiter`, `role`, `attributes`, `local_only`, `sync_mode`, `uidvalidity`, `uidnext`, `highestmodseq`, `total`, `unread`, `sync_state`, `last_synced_at`, `last_error` | IMAP 文件夹或 POP3 虚拟收件箱; `sync_mode` 为 `full`, `pull`, `off` |
 | `messages` | `id`, `account_id`, `mailbox_id`, `uid`, `pop3_uidl`, `modseq`, `message_id_header`, `provider_msg_id`, `dedupe_key`, `in_reply_to`, `references`, `thread_id`, `subject`, `from`, `to`, `cc`, `bcc`, `sent_at`, `received_at`, `size`, `flags`, `keywords`, `local_flag`, `preserved_at`, `snippet`, `has_attachments`, `raw_sha256`, `body_state`, `attachments_state` | `dedupe_key` 为账号内稳定去重键; `local_flag` 是本地标记; `preserved_at` 表示账号删除后保留的标记邮件 |

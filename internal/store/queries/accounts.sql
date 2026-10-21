@@ -1,16 +1,18 @@
 -- name: CreateAccount :one
 INSERT INTO accounts (
-    id, name, email, color, provider, username, auth_type, password_enc,
+    id, name, email, provider, username, auth_type, password_enc,
     oauth_provider, oauth_scopes, oauth_refresh_enc, receive_protocol,
     imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security,
+    smtp_username, smtp_password_enc,
     smtp_helo_hostname, sync_enabled, initial_sync_range, download_scope,
     initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8,
-    $9, $10, $11, $12,
-    $13, $14, $15, $16, $17, $18,
-    $19, $20, $21, $22,
-    $23, $24, $25, $26
+    $1, $2, $3, $4, $5, $6, $7,
+    $8, $9, $10, $11,
+    $12, $13, $14, $15, $16, $17,
+    $18, $19,
+    $20, $21, $22, $23,
+    $24, $25, $26, $27
 )
 RETURNING *;
 
@@ -25,14 +27,15 @@ SELECT * FROM accounts WHERE id = $1;
 
 -- name: UpdateAccount :one
 UPDATE accounts SET
-    name = $2, email = $3, color = $4,
-    username = $5, auth_type = $6, password_enc = $7,
-    oauth_provider = $8, oauth_scopes = $9, oauth_refresh_enc = $10,
-    receive_protocol = $11, imap_addr = $12, imap_security = $13,
-    pop3_addr = $14, pop3_security = $15, smtp_addr = $16, smtp_security = $17,
-    smtp_helo_hostname = $18, sync_enabled = $19,
-    initial_sync_range = $20, download_scope = $21, initial_sync_cutoff_at = $22,
-    sent_copy_mode = $23, pop3_leave_on_server = $24, pop3_delete_on_server = $25,
+    name = $2, email = $3,
+    username = $4, auth_type = $5, password_enc = $6,
+    oauth_provider = $7, oauth_scopes = $8, oauth_refresh_enc = $9,
+    receive_protocol = $10, imap_addr = $11, imap_security = $12,
+    pop3_addr = $13, pop3_security = $14, smtp_addr = $15, smtp_security = $16,
+    smtp_username = $17, smtp_password_enc = $18,
+    smtp_helo_hostname = $19, sync_enabled = $20,
+    initial_sync_range = $21, download_scope = $22, initial_sync_cutoff_at = $23,
+    sent_copy_mode = $24, pop3_leave_on_server = $25, pop3_delete_on_server = $26,
     updated_at = now()
 WHERE id = $1
 RETURNING *;

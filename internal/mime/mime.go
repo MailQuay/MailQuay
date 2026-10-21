@@ -58,6 +58,9 @@ type Options struct {
 	MaxAttachmentBytes int64
 	// KeepAttachmentData controls whether attachment Data is populated.
 	KeepAttachmentData bool
+	// KeepInlineImages keeps decoded data for inline images referenced by the
+	// message body, even when other attachment data is discarded.
+	KeepInlineImages bool
 }
 
 // Parse parses a raw message. Only a completely unreadable header produces an
@@ -257,7 +260,12 @@ func (c *collector) leaf(entity *message.Entity, path string) {
 	contentID := strings.Trim(strings.TrimSpace(entity.Header.Get("Content-Id")), "<>")
 
 	if isAttachment(mediaType, filename, disposition) {
-		data, size := c.readAttachment(entity.Body)
+		inlineImage := strings.HasPrefix(mediaType, "image/") &&
+			(disposition == "inline" || contentID != "")
+		data, size := c.readAttachment(
+			entity.Body,
+			c.opts.KeepAttachmentData || (c.opts.KeepInlineImages && inlineImage),
+		)
 		c.parsed.Attachments = append(c.parsed.Attachments, Attachment{
 			PartPath:    path,
 			Filename:    filename,
@@ -288,9 +296,9 @@ func (c *collector) leaf(entity *message.Entity, path string) {
 	}
 }
 
-func (c *collector) readAttachment(body io.Reader) ([]byte, int64) {
+func (c *collector) readAttachment(body io.Reader, keep bool) ([]byte, int64) {
 	limit := c.opts.MaxAttachmentBytes
-	if !c.opts.KeepAttachmentData {
+	if !keep {
 		size, _ := io.Copy(io.Discard, body)
 		return nil, size
 	}

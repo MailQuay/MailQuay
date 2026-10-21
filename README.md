@@ -18,7 +18,7 @@ MailQuay is not a mail server. It does not run an MTA, does not own a domain, an
 
 ## Planned features
 
-- Multi-account unified inbox, folder tree, unread counts, and per-account color coding.
+- Multi-account unified inbox, folder tree, and unread counts.
 - IMAP synchronization of folders, flags, and message metadata, with background body prefetch and on-demand fetch for the rest.
 - POP3 compatibility mode for providers that only expose POP3: one virtual inbox, polling, UIDL tracking, and local-only flags.
 - Per-account sync range (all time by default, or 1 day to 1 year) and download scope (headers, full without attachments, or full with attachments), fetched and indexed in the background.

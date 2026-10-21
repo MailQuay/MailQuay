@@ -74,10 +74,72 @@ func TestSanitizeHTMLRemovesActiveContent(t *testing.T) {
 	}
 }
 
+func TestSanitizeHTMLKeepsInlineDataImages(t *testing.T) {
+	raw := `<img src="data:image/png;base64,AAAA" alt="logo">` +
+		`<a href="data:text/html,<b>x</b>">bad</a>` +
+		`<img src="data:text/plain;base64,QQ==">`
+
+	out := mailmime.SanitizeHTML(raw)
+	if !strings.Contains(out, `data-src="data:image/png;base64,AAAA"`) {
+		t.Errorf("inline data image lost: %s", out)
+	}
+	if strings.Contains(out, "data:text/plain") {
+		t.Errorf("non-image data URL kept: %s", out)
+	}
+	if strings.Contains(out, `href="data:`) {
+		t.Errorf("data link kept: %s", out)
+	}
+}
+
+func TestSanitizeHTMLKeepsTableLayoutAttributes(t *testing.T) {
+	raw := `<table align="center" width="600" cellpadding="0" cellspacing="0" border="0">` +
+		`<tr><td align="right" valign="top" width="50%" bgcolor="#ffffff">x</td></tr></table>`
+
+	out := mailmime.SanitizeHTML(raw)
+	for _, want := range []string{
+		`align="center"`, `width="600"`, `cellpadding="0"`, `cellspacing="0"`, `border="0"`,
+		`align="right"`, `valign="top"`, `width="50%"`, `bgcolor="#ffffff"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("layout attribute %q lost: %s", want, out)
+		}
+	}
+}
+
+func TestSanitizeHTMLLiftsRootBackground(t *testing.T) {
+	raw := `<html style="background: url(https://tracker.example/bg.png) repeat; background-color: #5c65ae">` +
+		`<body style="background-color: #ffffff"><p>x</p></body></html>`
+
+	out := mailmime.SanitizeHTML(raw)
+	if !strings.Contains(out, "html, body {") || !strings.Contains(out, "#5c65ae") {
+		t.Errorf("root background lost: %s", out)
+	}
+	if strings.Contains(out, "tracker.example") {
+		t.Errorf("remote root background kept: %s", out)
+	}
+}
+
+func TestSanitizeHTMLKeepsSafeStyleBlocks(t *testing.T) {
+	raw := `<style>@media only screen { .container { width: 95% !important } } .vmiss-logo { width: 150px }</style>` +
+		`<style>.x { background: url(https://tracker.example/a.png); color: #111111 }</style>` +
+		`<p class="container">text</p>`
+
+	out := mailmime.SanitizeHTML(raw)
+	for _, want := range []string{"@media only screen", ".vmiss-logo", "width: 150px"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("style block lost %q: %s", want, out)
+		}
+	}
+	if strings.Contains(out, "tracker.example") {
+		t.Errorf("remote CSS URL kept: %s", out)
+	}
+}
+
 func TestSanitizeHTMLRewritesRemoteResources(t *testing.T) {
 	raw := `<p class="mail-para" style="color: red">Hi ` +
 		`<a href="https://example.com/path">link</a></p>` +
 		`<div class="banner" style="background-image: url('https://tracker.example/bg.png'); color: blue">bg</div>` +
+		`<table background="https://tracker.example/table.png"><tr><td>x</td></tr></table>` +
 		`<img src="https://tracker.example/pixel.gif" alt="pixel" width="1" height="1" onerror="x">`
 
 	out := mailmime.SanitizeHTML(raw)
@@ -108,6 +170,11 @@ func TestSanitizeHTMLRewritesRemoteResources(t *testing.T) {
 	}
 	if imgAttrs["alt"] != "pixel" || imgAttrs["width"] != "1" || imgAttrs["height"] != "1" {
 		t.Errorf("img metadata lost: %+v", imgAttrs)
+	}
+
+	table := findElement(nodes, "table")
+	if table == nil || attrs(table)["data-background-src"] != "https://tracker.example/table.png" {
+		t.Errorf("table background not rewritten: %+v", table)
 	}
 	if _, ok := imgAttrs["onerror"]; ok {
 		t.Errorf("event handler survived: %+v", imgAttrs)

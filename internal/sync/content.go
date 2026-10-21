@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -114,7 +115,11 @@ func (s *Service) cacheRaw(ctx context.Context, acct sqlcgen.Account, msg sqlcge
 		return err
 	}
 	keepAttachments := acct.DownloadScope == "full_with_attachments"
-	parsed, err := mime.Parse(raw, mime.Options{MaxAttachmentBytes: s.settings.MaxAttachmentBytes(), KeepAttachmentData: keepAttachments})
+	parsed, err := mime.Parse(raw, mime.Options{
+		MaxAttachmentBytes: s.settings.MaxAttachmentBytes(),
+		KeepAttachmentData: keepAttachments,
+		KeepInlineImages:   true,
+	})
 	if err != nil {
 		return err
 	}
@@ -124,6 +129,11 @@ func (s *Service) cacheRaw(ctx context.Context, acct sqlcgen.Account, msg sqlcge
 		}
 	}
 	for _, att := range parsed.Attachments {
+		inlineImage := strings.HasPrefix(att.ContentType, "image/") &&
+			(att.Disposition == "inline" || att.ContentID != "")
+		if !keepAttachments && !inlineImage {
+			continue
+		}
 		attSHA := ""
 		if len(att.Data) > 0 {
 			attSHA, err = s.storage.PutBlob(att.Data)

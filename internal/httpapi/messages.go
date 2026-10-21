@@ -356,7 +356,6 @@ func (s *Server) mapMessages(r *http.Request, rows []sqlcgen.Message) []oapi.Mes
 		if acct, ok := accountMap[row.AccountID]; ok {
 			item.AccountEmail = &acct.Email
 			item.AccountName = &acct.Name
-			item.AccountColor = &acct.Color
 		}
 		mb, ok := mailboxMap[row.MailboxID]
 		if !ok {
