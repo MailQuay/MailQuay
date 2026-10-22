@@ -1,6 +1,6 @@
 module github.com/mailquay/mailquay
 
-go 1.27.2
+go 1.27.3
 
 require (
 	github.com/blevesearch/bleve/v2 v2.6.1
