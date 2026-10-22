@@ -177,7 +177,7 @@ stateDiagram-v2
 
 初次同步:
 
-1. `LIST` 获取文件夹, 按名称和特殊用途标志映射角色: `inbox`, `sent`, `drafts`, `trash`, `junk`, `archive`.
+1. `LIST` 获取文件夹, 按名称和特殊用途标志映射角色: `inbox`, `sent`, `drafts`, `trash`, `junk`, `archive`. 每个角色只保留一个文件夹: 带对应特殊用途标志的优先, 其余同名文件夹降级为 `custom`; 否则侧边栏, 删除目标和全局计数会指向不确定的文件夹.
 2. 对每个启用的文件夹 `SELECT`, 记录 `UIDVALIDITY` 和 `UIDNEXT`.
 3. 按 UID 区间分批 `FETCH` 原始头 (`BODY.PEEK[HEADER]`), 标志, 大小和 `BODYSTRUCTURE`, 每批默认 50 封, 由设置 `envelope_batch_size` 控制.
 4. 本地解析头部的 `Message-ID`, `References`, `In-Reply-To`, 主题, 地址和日期, 归并线程; 不请求 IMAP `ENVELOPE`, 避免服务端的畸形结构拖垮整批.
@@ -191,6 +191,9 @@ stateDiagram-v2
 - 非 INBOX 文件夹不保持 IDLE, 每 60 秒通过 `STATUS` 检查 `MESSAGES`, `UNSEEN`, `UIDNEXT`, 有变化再同步.
 - 每 15 分钟做一次标志对账, 修复本地乐观更新与服务端的偏差.
 - 已读状态变更, 移动和删除在本地提交后立即重算受影响文件夹的 `total` 和 `unread`, 并推送 `mailbox.updated`; 侧边栏计数不等待下一轮同步.
+- 本地移动先把消息 UID 置空, 由 `pending_ops` 里的 `move` 执行远端移动; MOVE 或 COPY 返回目标 UID (`COPYUID`) 时立即回写, 并按目标 UID 删除并发同步可能插入的重复行.
+- 服务端不返回目标 UID 时, 目标文件夹同步遇到 uid 为空且 `message_id_header` 相同的行直接收养, 更新 UID, 标志和去重键, 不再插入第二份.
+- 启动时清理 uid 为空且同一文件夹内已有同 `dedupe_key` 同步行的占位行; 这类行只删除本地并清理搜索文档, 不排队远端操作.
 - 一轮同步中途连接断开时立即中止本轮: `mailsession` 丢弃死连接, 用新连接重跑整轮. 首次尝试不写入文件夹错误, 重试仍失败才记录具体文件夹; 未尝试的文件夹保持原状态.
 
 IDLE 连接:
@@ -458,6 +461,7 @@ sequenceDiagram
 - `delete_queue_days` 默认 30 天; 到期 worker 永久删除远端邮件和本地记录, 再删除搜索文档.
 - 服务端提前清理了 Trash 邮件时, worker 对账后把队列标记完成.
 - 删除失败进入任务环并重试; 用户可以在设置中切换删除模式.
+- 邮件已在 Trash 时再次删除会永久删除远端邮件; 阅读器确认框必须提示会从服务器永久移除且不可恢复.
 - 已本地归档的邮件不受远端删除, 删除队列和账号删除影响.
 
 ## 5. 实时推送

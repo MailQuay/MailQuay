@@ -168,4 +168,45 @@ func TestIMAPDeleteMovesToTrash(t *testing.T) {
 	if payload.Dest != trash.Path {
 		t.Fatalf("move dest = %q, want %q", payload.Dest, trash.Path)
 	}
+
+	if err := syncer.ProcessOpsNow(ctx, acct.ID); err != nil {
+		t.Fatal(err)
+	}
+	moved, err := st.GetMessage(ctx, rows[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if moved.Uid == nil {
+		t.Fatal("moved message has no destination uid")
+	}
+	if err := syncer.SyncNow(ctx, acct.ID); err != nil {
+		t.Fatal(err)
+	}
+	trashRows, err := st.ListMailboxMessages(ctx, sqlcgen.ListMailboxMessagesParams{MailboxID: trash.ID, PageLimit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(trashRows) != 1 {
+		t.Fatalf("trash messages = %d, want 1", len(trashRows))
+	}
+
+	// A server that never reports the destination UID leaves the moved row
+	// UID-less. The destination sync must adopt that row by Message-ID instead
+	// of inserting a second copy.
+	if err := st.UpdateMessageUID(ctx, sqlcgen.UpdateMessageUIDParams{ID: rows[0].ID, Uid: nil}); err != nil {
+		t.Fatal(err)
+	}
+	if err := syncer.SyncNow(ctx, acct.ID); err != nil {
+		t.Fatal(err)
+	}
+	trashRows, err = st.ListMailboxMessages(ctx, sqlcgen.ListMailboxMessagesParams{MailboxID: trash.ID, PageLimit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(trashRows) != 1 {
+		t.Fatalf("trash messages after uid loss = %d, want 1", len(trashRows))
+	}
+	if trashRows[0].Uid == nil {
+		t.Fatal("adopted message has no destination uid")
+	}
 }

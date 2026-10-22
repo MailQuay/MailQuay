@@ -210,6 +210,33 @@ SELECT * FROM messages WHERE account_id = $1 AND dedupe_key = $2;
 -- name: FindMessageByUID :one
 SELECT * FROM messages WHERE mailbox_id = $1 AND uid = $2;
 
+-- name: UpdateMessageUID :exec
+UPDATE messages SET uid = sqlc.narg(uid)::bigint, updated_at = now() WHERE id = sqlc.arg(id);
+
+-- name: ListMessagesByMailboxUID :many
+SELECT * FROM messages
+WHERE mailbox_id = sqlc.arg(mailbox_id) AND uid = sqlc.arg(uid)::bigint
+  AND id <> sqlc.arg(exclude_id);
+
+-- name: FindMovedMessageByHeader :one
+SELECT * FROM messages
+WHERE mailbox_id = sqlc.arg(mailbox_id) AND uid IS NULL
+  AND message_id_header <> '' AND message_id_header = sqlc.arg(message_id_header)
+ORDER BY created_at DESC
+LIMIT 1;
+
+-- name: ListGhostMessageIDs :many
+SELECT m.id FROM messages m
+WHERE m.uid IS NULL
+  AND EXISTS (
+      SELECT 1 FROM messages d
+      WHERE d.account_id = m.account_id
+        AND d.mailbox_id = m.mailbox_id
+        AND d.dedupe_key = m.dedupe_key
+        AND d.id <> m.id
+        AND d.uid IS NOT NULL
+  );
+
 -- name: ListPOP3Messages :many
 SELECT id, pop3_uidl FROM messages WHERE mailbox_id = $1 AND pop3_uidl IS NOT NULL;
 

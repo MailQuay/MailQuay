@@ -313,6 +313,31 @@ func (s *Service) storeIMAPEnvelope(ctx context.Context, acct sqlcgen.Account, m
 	if received.IsZero() {
 		received = time.Now().UTC()
 	}
+	// A local move clears the row UID until the IMAP MOVE reports the
+	// destination UID. Servers without UIDPLUS never report it, so the moved
+	// row is still waiting here; adopt it instead of storing a second copy.
+	if env.GMailID == "" && env.MessageID != "" {
+		if stub, err := s.store.FindMovedMessageByHeader(ctx, sqlcgen.FindMovedMessageByHeaderParams{
+			MailboxID: mb.ID, MessageIDHeader: env.MessageID,
+		}); err == nil {
+			if err := s.store.UpdateMessageUID(ctx, sqlcgen.UpdateMessageUIDParams{ID: stub.ID, Uid: &uid}); err != nil {
+				return fmt.Errorf("adopt moved message: %w", err)
+			}
+			if err := s.store.UpdateMessageFlags(ctx, sqlcgen.UpdateMessageFlagsParams{
+				ID: stub.ID, Flags: emptyIfNil(env.Flags), Keywords: stub.Keywords,
+				Modseq: int64Ptr(int64(env.ModSeq)),
+			}); err != nil {
+				return fmt.Errorf("adopt moved message flags: %w", err)
+			}
+			stubKey := message.DedupeKey(env.GMailID, env.MessageID, stub.RawSha256, mb.ID.String(), &uid)
+			if stubKey != stub.DedupeKey {
+				if err := s.store.SetMessageDedupeKey(ctx, sqlcgen.SetMessageDedupeKeyParams{ID: stub.ID, DedupeKey: stubKey}); err != nil {
+					return fmt.Errorf("adopt moved message key: %w", err)
+				}
+			}
+			return nil
+		}
+	}
 	var sentAt *time.Time
 	if !env.SentAt.IsZero() {
 		t := env.SentAt.UTC()

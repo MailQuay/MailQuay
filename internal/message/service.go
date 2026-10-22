@@ -418,9 +418,11 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// PermanentlyDelete removes local data and queues remote cleanup.
+// PermanentlyDelete removes local data and queues remote cleanup. Rows
+// without an IMAP UID are local placeholders for a message that already moved
+// away, so no remote operation is queued for them.
 func (s *Service) PermanentlyDelete(ctx context.Context, msg sqlcgen.Message, acct sqlcgen.Account) error {
-	if acct.ReceiveProtocol == "imap" {
+	if acct.ReceiveProtocol == "imap" && msg.Uid != nil {
 		payload, _ := json.Marshal(map[string]any{})
 		if _, err := s.store.EnqueuePendingOp(ctx, sqlcgen.EnqueuePendingOpParams{
 			ID: uuid.MustParse(platform.NewID()), AccountID: msg.AccountID, MailboxID: &msg.MailboxID,
@@ -457,6 +459,39 @@ func (s *Service) DeleteLocal(ctx context.Context, msg sqlcgen.Message) error {
 	}
 	s.hub.Publish("message.removed", map[string]any{"messageId": msg.ID.String(), "mailboxId": msg.MailboxID.String()})
 	return nil
+}
+
+// RefreshMailboxCounts recomputes and publishes the stored counters for a
+// mailbox. Callers that remove rows outside Delete/PermanentlyDelete use it to
+// keep the sidebar counts correct without waiting for the next sync pass.
+func (s *Service) RefreshMailboxCounts(ctx context.Context, mailboxID uuid.UUID) {
+	s.refreshMailboxCounts(ctx, mailboxID)
+}
+
+// CleanupMovedDuplicates drops UID-less rows that duplicate a synced row of
+// the same message in the same mailbox. A local move clears the UID until the
+// IMAP MOVE reports the destination UID, so a destination sync pass in that
+// window inserts a second copy and leaves the placeholder behind.
+func (s *Service) CleanupMovedDuplicates(ctx context.Context) (int, error) {
+	ids, err := s.store.ListGhostMessageIDs(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("list moved duplicates: %w", err)
+	}
+	removed := 0
+	for _, id := range ids {
+		msg, err := s.store.GetMessage(ctx, id)
+		if err != nil {
+			s.logger.Debug("load moved duplicate", "message", id, "error", err)
+			continue
+		}
+		if err := s.DeleteLocal(ctx, msg); err != nil {
+			s.logger.Warn("drop moved duplicate", "message", id, "error", err)
+			continue
+		}
+		s.refreshMailboxCounts(ctx, msg.MailboxID)
+		removed++
+	}
+	return removed, nil
 }
 
 // Archive copies the full message into local storage.

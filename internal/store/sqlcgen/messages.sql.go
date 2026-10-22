@@ -277,6 +277,58 @@ func (q *Queries) FindMessageByUID(ctx context.Context, arg FindMessageByUIDPara
 	return i, err
 }
 
+const findMovedMessageByHeader = `-- name: FindMovedMessageByHeader :one
+SELECT id, account_id, mailbox_id, uid, pop3_uidl, modseq, message_id_header, provider_msg_id, dedupe_key, in_reply_to, references_list, thread_id, subject, from_addr, to_addrs, cc_addrs, bcc_addrs, sent_at, received_at, size, flags, keywords, local_flag, preserved_at, snippet, has_attachments, raw_sha256, body_state, attachments_state, created_at, updated_at FROM messages
+WHERE mailbox_id = $1 AND uid IS NULL
+  AND message_id_header <> '' AND message_id_header = $2
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+type FindMovedMessageByHeaderParams struct {
+	MailboxID       uuid.UUID `json:"mailbox_id"`
+	MessageIDHeader string    `json:"message_id_header"`
+}
+
+func (q *Queries) FindMovedMessageByHeader(ctx context.Context, arg FindMovedMessageByHeaderParams) (Message, error) {
+	row := q.db.QueryRow(ctx, findMovedMessageByHeader, arg.MailboxID, arg.MessageIDHeader)
+	var i Message
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.MailboxID,
+		&i.Uid,
+		&i.Pop3Uidl,
+		&i.Modseq,
+		&i.MessageIDHeader,
+		&i.ProviderMsgID,
+		&i.DedupeKey,
+		&i.InReplyTo,
+		&i.ReferencesList,
+		&i.ThreadID,
+		&i.Subject,
+		&i.FromAddr,
+		&i.ToAddrs,
+		&i.CcAddrs,
+		&i.BccAddrs,
+		&i.SentAt,
+		&i.ReceivedAt,
+		&i.Size,
+		&i.Flags,
+		&i.Keywords,
+		&i.LocalFlag,
+		&i.PreservedAt,
+		&i.Snippet,
+		&i.HasAttachments,
+		&i.RawSha256,
+		&i.BodyState,
+		&i.AttachmentsState,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getMessage = `-- name: GetMessage :one
 SELECT id, account_id, mailbox_id, uid, pop3_uidl, modseq, message_id_header, provider_msg_id, dedupe_key, in_reply_to, references_list, thread_id, subject, from_addr, to_addrs, cc_addrs, bcc_addrs, sent_at, received_at, size, flags, keywords, local_flag, preserved_at, snippet, has_attachments, raw_sha256, body_state, attachments_state, created_at, updated_at FROM messages WHERE id = $1
 `
@@ -565,6 +617,39 @@ func (q *Queries) ListAllMessages(ctx context.Context) ([]Message, error) {
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listGhostMessageIDs = `-- name: ListGhostMessageIDs :many
+SELECT m.id FROM messages m
+WHERE m.uid IS NULL
+  AND EXISTS (
+      SELECT 1 FROM messages d
+      WHERE d.account_id = m.account_id
+        AND d.mailbox_id = m.mailbox_id
+        AND d.dedupe_key = m.dedupe_key
+        AND d.id <> m.id
+        AND d.uid IS NOT NULL
+  )
+`
+
+func (q *Queries) ListGhostMessageIDs(ctx context.Context) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listGhostMessageIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -957,6 +1042,70 @@ SELECT id, account_id, mailbox_id, uid, pop3_uidl, modseq, message_id_header, pr
 
 func (q *Queries) ListMessagesByIDs(ctx context.Context, ids []uuid.UUID) ([]Message, error) {
 	rows, err := q.db.Query(ctx, listMessagesByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Message
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.ID,
+			&i.AccountID,
+			&i.MailboxID,
+			&i.Uid,
+			&i.Pop3Uidl,
+			&i.Modseq,
+			&i.MessageIDHeader,
+			&i.ProviderMsgID,
+			&i.DedupeKey,
+			&i.InReplyTo,
+			&i.ReferencesList,
+			&i.ThreadID,
+			&i.Subject,
+			&i.FromAddr,
+			&i.ToAddrs,
+			&i.CcAddrs,
+			&i.BccAddrs,
+			&i.SentAt,
+			&i.ReceivedAt,
+			&i.Size,
+			&i.Flags,
+			&i.Keywords,
+			&i.LocalFlag,
+			&i.PreservedAt,
+			&i.Snippet,
+			&i.HasAttachments,
+			&i.RawSha256,
+			&i.BodyState,
+			&i.AttachmentsState,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMessagesByMailboxUID = `-- name: ListMessagesByMailboxUID :many
+SELECT id, account_id, mailbox_id, uid, pop3_uidl, modseq, message_id_header, provider_msg_id, dedupe_key, in_reply_to, references_list, thread_id, subject, from_addr, to_addrs, cc_addrs, bcc_addrs, sent_at, received_at, size, flags, keywords, local_flag, preserved_at, snippet, has_attachments, raw_sha256, body_state, attachments_state, created_at, updated_at FROM messages
+WHERE mailbox_id = $1 AND uid = $2::bigint
+  AND id <> $3
+`
+
+type ListMessagesByMailboxUIDParams struct {
+	MailboxID uuid.UUID `json:"mailbox_id"`
+	Uid       int64     `json:"uid"`
+	ExcludeID uuid.UUID `json:"exclude_id"`
+}
+
+func (q *Queries) ListMessagesByMailboxUID(ctx context.Context, arg ListMessagesByMailboxUIDParams) ([]Message, error) {
+	rows, err := q.db.Query(ctx, listMessagesByMailboxUID, arg.MailboxID, arg.Uid, arg.ExcludeID)
 	if err != nil {
 		return nil, err
 	}
@@ -1713,6 +1862,20 @@ type UpdateMessageThreadParams struct {
 
 func (q *Queries) UpdateMessageThread(ctx context.Context, arg UpdateMessageThreadParams) error {
 	_, err := q.db.Exec(ctx, updateMessageThread, arg.ID, arg.ThreadID)
+	return err
+}
+
+const updateMessageUID = `-- name: UpdateMessageUID :exec
+UPDATE messages SET uid = $1::bigint, updated_at = now() WHERE id = $2
+`
+
+type UpdateMessageUIDParams struct {
+	Uid *int64    `json:"uid"`
+	ID  uuid.UUID `json:"id"`
+}
+
+func (q *Queries) UpdateMessageUID(ctx context.Context, arg UpdateMessageUIDParams) error {
+	_, err := q.db.Exec(ctx, updateMessageUID, arg.Uid, arg.ID)
 	return err
 }
 

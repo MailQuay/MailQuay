@@ -126,6 +126,26 @@ func (s *Service) SyncNow(ctx context.Context, accountID uuid.UUID) error {
 	return s.syncAccount(ctx, accountID)
 }
 
+// ProcessOpsNow applies queued remote operations for one account
+// synchronously (used by integration tests and manual triggers).
+func (s *Service) ProcessOpsNow(ctx context.Context, accountID uuid.UUID) error {
+	acct, err := s.store.GetAccount(ctx, accountID)
+	if err != nil {
+		return err
+	}
+	switch acct.ReceiveProtocol {
+	case "imap":
+		if err := s.processAccountOps(ctx, acct); err != nil && !errors.Is(err, mailsession.ErrBusy) {
+			return err
+		}
+	case "pop3":
+		if err := s.processPOP3AccountOps(ctx, acct); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // TriggerAccount requests an immediate sync.
 func (s *Service) TriggerAccount(id uuid.UUID) {
 	select {

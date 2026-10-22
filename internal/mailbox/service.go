@@ -126,10 +126,11 @@ func (s *Service) counts(ctx context.Context) (Counts, error) {
 // UpsertFromFolders stores a discovered IMAP folder set and returns the
 // resulting mailboxes keyed by path. All Mail folders are skipped.
 func (s *Service) UpsertFromFolders(ctx context.Context, accountID uuid.UUID, folders []imapclient.Folder) ([]sqlcgen.Mailbox, error) {
+	roles := AssignRoles(folders)
 	out := make([]sqlcgen.Mailbox, 0, len(folders))
-	for _, folder := range folders {
-		role, skip := RoleFromFolder(folder)
-		if skip {
+	for i, folder := range folders {
+		role := roles[i]
+		if role == "" {
 			continue
 		}
 		attrs, _ := json.Marshal(folder.Attributes)

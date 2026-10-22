@@ -114,7 +114,11 @@ func (s *Service) applyAccountOps(ctx context.Context, client *imapclient.Client
 				execErr = err
 				break
 			}
-			execErr = client.Move(ctx, uint32(*op.Uid), payload.Dest)
+			var destUID uint32
+			destUID, execErr = client.Move(ctx, uint32(*op.Uid), payload.Dest)
+			if execErr == nil && op.MessageID != nil {
+				s.recordMovedMessage(ctx, *op.MessageID, destUID)
+			}
 		case "delete":
 			if op.Uid == nil {
 				execErr = errors.New("missing uid")
@@ -137,6 +141,43 @@ func (s *Service) applyAccountOps(ctx context.Context, client *imapclient.Client
 		}
 	}
 	return nil
+}
+
+// recordMovedMessage stores the destination UID reported by MOVE. Without it
+// the moved row stays UID-less and the next destination sync inserts a second
+// copy of the same message. A sync pass that ran while the move was in flight
+// may already have inserted that copy, so rows sharing the destination UID are
+// dropped here.
+func (s *Service) recordMovedMessage(ctx context.Context, id uuid.UUID, destUID uint32) {
+	if destUID == 0 {
+		return
+	}
+	if err := s.store.UpdateMessageUID(ctx, sqlcgen.UpdateMessageUIDParams{
+		ID: id, Uid: ptrInt64(int64(destUID)),
+	}); err != nil {
+		s.logger.Warn("record moved message uid", "message", id, "error", err)
+		return
+	}
+	msg, err := s.store.GetMessage(ctx, id)
+	if err != nil {
+		s.logger.Debug("load moved message", "message", id, "error", err)
+		return
+	}
+	dupes, err := s.store.ListMessagesByMailboxUID(ctx, sqlcgen.ListMessagesByMailboxUIDParams{
+		MailboxID: msg.MailboxID, Uid: int64(destUID), ExcludeID: id,
+	})
+	if err != nil {
+		s.logger.Warn("list moved duplicates", "message", id, "error", err)
+		return
+	}
+	for _, dupe := range dupes {
+		if err := s.messages.DeleteLocal(ctx, dupe); err != nil {
+			s.logger.Warn("drop moved duplicate", "message", dupe.ID, "error", err)
+		}
+	}
+	if len(dupes) > 0 {
+		s.messages.RefreshMailboxCounts(ctx, msg.MailboxID)
+	}
 }
 
 func (s *Service) retryOp(ctx context.Context, op sqlcgen.PendingOp, cause error) {

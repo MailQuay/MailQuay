@@ -116,6 +116,11 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	ids := identity.NewService(st)
 	mailboxes := mailbox.NewService(st)
 	messages := message.NewService(st, hub, blobs, logger)
+	if removed, err := messages.CleanupMovedDuplicates(ctx); err != nil {
+		logger.Warn("clean moved duplicates", "error", err)
+	} else if removed > 0 {
+		logger.Info("removed duplicate moved messages", "count", removed)
+	}
 	composeSvc := compose.NewService(st, accounts, ids, settingsSvc, messages, blobs, hub, logger, pacer, sessions)
 	syncSvc := syncservice.NewService(st, cfg, logger, hub, blobs, accounts, mailboxes, messages, settingsSvc, pacer, sessions)
 

@@ -69,3 +69,65 @@ func SystemRole(role string) bool {
 	}
 	return false
 }
+
+// systemRoleAttributes maps a role to the special-use attribute that declares
+// it.
+var systemRoleAttributes = map[string]string{
+	"inbox":   "\\inbox",
+	"sent":    "\\sent",
+	"drafts":  "\\drafts",
+	"trash":   "\\trash",
+	"junk":    "\\junk",
+	"archive": "\\archive",
+}
+
+// AssignRoles maps folders to roles and keeps at most one folder per system
+// role. Providers can expose both a special-use folder and a plain folder with
+// a matching name (for example "Deleted Items" declared as \Trash next to a
+// "Trash" folder). Duplicate roles make the sidebar, the delete target and the
+// global counters pick an arbitrary folder, so only the special-use folder
+// keeps the role, ties fall back to path order, and the rest become custom.
+func AssignRoles(folders []imapclient.Folder) []string {
+	roles := make([]string, len(folders))
+	owner := make(map[string]int, len(systemRoleAttributes))
+	for i, folder := range folders {
+		role, skip := RoleFromFolder(folder)
+		if skip {
+			continue
+		}
+		roles[i] = role
+		if _, ok := systemRoleAttributes[role]; !ok {
+			continue
+		}
+		current, found := owner[role]
+		if !found || preferRoleFolder(folder, folders[current], role) {
+			owner[role] = i
+		}
+	}
+	for role, index := range owner {
+		for i := range roles {
+			if i != index && roles[i] == role {
+				roles[i] = "custom"
+			}
+		}
+	}
+	return roles
+}
+
+func preferRoleFolder(candidate, current imapclient.Folder, role string) bool {
+	attr := systemRoleAttributes[role]
+	candidateDeclared := hasAttribute(candidate, attr)
+	if candidateDeclared != hasAttribute(current, attr) {
+		return candidateDeclared
+	}
+	return candidate.Path < current.Path
+}
+
+func hasAttribute(folder imapclient.Folder, attr string) bool {
+	for _, a := range folder.Attributes {
+		if strings.EqualFold(a, attr) {
+			return true
+		}
+	}
+	return false
+}

@@ -768,18 +768,33 @@ func (c *Client) StoreFlags(ctx context.Context, uid uint32, flags []string, add
 }
 
 // Move moves uid to dest. It uses MOVE when available and otherwise falls
-// back to COPY + STORE \Deleted + EXPUNGE.
-func (c *Client) Move(ctx context.Context, uid uint32, dest string) error {
+// back to COPY + STORE \Deleted + EXPUNGE. The returned UID is the message UID
+// in dest, reported through UIDPLUS or IMAP4rev2; servers without either
+// report zero and the destination mailbox sync fills it in later.
+func (c *Client) Move(ctx context.Context, uid uint32, dest string) (uint32, error) {
 	if uid == 0 {
-		return errors.New("imapclient: move: uid must be greater than zero")
+		return 0, errors.New("imapclient: move: uid must be greater than zero")
 	}
 	if dest == "" {
-		return errors.New("imapclient: move: empty destination")
+		return 0, errors.New("imapclient: move: empty destination")
 	}
-	return c.do(ctx, func() error {
-		_, err := c.c.Move(imap.UIDSetNum(imap.UID(uid)), dest).Wait()
-		return err
+	var destUID uint32
+	err := c.do(ctx, func() error {
+		data, err := c.c.Move(imap.UIDSetNum(imap.UID(uid)), dest).Wait()
+		if err != nil {
+			return err
+		}
+		if data != nil {
+			if set, ok := data.DestUIDs.(imap.UIDSet); ok && len(set) > 0 {
+				destUID = uint32(set[0].Start)
+			}
+		}
+		return nil
 	})
+	if err != nil {
+		return 0, err
+	}
+	return destUID, nil
 }
 
 // Expunge permanently removes uids from the selected mailbox.
