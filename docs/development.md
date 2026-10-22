@@ -298,6 +298,7 @@ pnpm e2e
 
 - 设计令牌定义在 `src/styles/index.css`, 使用 CSS 变量.
 - 明暗主题通过 `.dark` 类切换, 不复制两套组件样式.
+- 首屏主题由 `public/theme-init.js` 在 `<head>` 内同步执行, React 挂载前写入 `.dark` 和 `color-scheme`; CSP 禁止内联脚本, 主题逻辑不要写回 `index.html`.
 - 侧边栏尺寸使用 `--sidebar-width`, 不散落魔法数字.
 - 侧边栏使用固定宽度, 顶部品牌区, 分组折叠, 激活态 `bg-accent`, 移动端 Sheet.
 

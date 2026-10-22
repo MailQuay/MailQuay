@@ -46,7 +46,6 @@ func (h *assetsHandler) serveFile(w http.ResponseWriter, r *http.Request, name s
 	}
 	if strings.HasSuffix(name, ".html") {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-cache")
 	} else if strings.HasSuffix(name, ".js") {
 		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 	} else if strings.HasSuffix(name, ".css") {
@@ -58,6 +57,10 @@ func (h *assetsHandler) serveFile(w http.ResponseWriter, r *http.Request, name s
 	}
 	if immutable {
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	} else {
+		// Unhashed public files (index.html, config.js, theme-init.js) must be
+		// revalidated so a new build is picked up immediately.
+		w.Header().Set("Cache-Control", "no-cache")
 	}
 	_, _ = w.Write(data)
 }

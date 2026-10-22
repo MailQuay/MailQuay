@@ -14,6 +14,7 @@ func testAssets() fs.FS {
 		"index.html":        {Data: []byte(`<!doctype html><div id="root"></div>`)},
 		"assets/app-abc.js": {Data: []byte(`console.log('app')`)},
 		"config.js":         {Data: []byte(`window.__MAILQUAY_CONFIG__ = {};`)},
+		"theme-init.js":     {Data: []byte(`(() => {})();`)},
 	}
 }
 
@@ -37,6 +38,18 @@ func TestClientRoutesFallBackToIndex(t *testing.T) {
 		}
 		if !strings.Contains(recorder.Body.String(), `id="root"`) {
 			t.Fatalf("%s: body does not contain the app mount point", target)
+		}
+	}
+}
+
+func TestPublicFilesAreRevalidated(t *testing.T) {
+	for _, target := range []string{"/config.js", "/theme-init.js"} {
+		recorder := serve(testAssets(), http.MethodGet, target)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("%s: status = %d, want 200", target, recorder.Code)
+		}
+		if got := recorder.Header().Get("Cache-Control"); got != "no-cache" {
+			t.Fatalf("%s: cache control = %q", target, got)
 		}
 	}
 }
