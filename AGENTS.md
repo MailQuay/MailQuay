@@ -138,6 +138,7 @@ pnpm generate:api
 - 数据库访问必须经过 `store` 接口. 不在处理器中直接写 SQL.
 - 多表写入使用事务. 乐观更新与远端对账逻辑必须可重入.
 - 列表接口使用游标分页, 不使用 offset.
+- 更新类接口返回的资源必须与 GET 单条详情一致, 包含附件和账号/文件夹信息; 客户端才能安全替换缓存.
 - 主键使用 UUIDv7, 时间统一 UTC.
 - 新增或修改 IMAP/POP3 操作时, 必须说明失败重试, 连接中断后的行为; IMAP 还要覆盖 UIDVALIDITY 变化, POP3 要覆盖 UIDL 变化和 DELE 提交语义.
 - 新增环境变量时, 同步更新 `docs/development.md` 和 `.env.example`.
@@ -157,6 +158,7 @@ pnpm generate:api
 - 组件不直接 `fetch`, 统一使用 `lib/api/client.ts`.
 - 接口类型来自生成的 `schema.d.ts`, 不手写重复类型.
 - 乐观更新必须有失败回滚和用户可见提示.
+- 更新成功写回缓存时必须合并已有详情, 更新响应省略的附件和扩展字段不能丢失.
 - HTML 邮件必须经 DOMPurify 清洗并放入不带 `allow-scripts` 的 sandbox iframe.
 - 默认阻止远程图片和外链样式, 链接必须带 `rel="noopener noreferrer"`; 邮件自带的内联 `<style>` 块可以保留, 但必须移除 `@import`, 远程 `url()` 和可执行 CSS.
 - 阻止远程图片时, 1x1 或 2x2 及更小的跟踪像素直接移除, 不显示占位符也不计入阻止数量.

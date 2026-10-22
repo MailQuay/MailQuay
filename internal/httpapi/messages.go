@@ -70,8 +70,16 @@ func (s *Server) GetMessage(w http.ResponseWriter, r *http.Request, id oapi.Mess
 		s.internal(w, r, err)
 		return
 	}
+	detail := s.messageDetail(r, msg)
+	writeJSON(w, http.StatusOK, detail)
+}
+
+// messageDetail builds the full detail payload: attachments and account or
+// mailbox names are part of the response so clients can replace their cached
+// message after an update without losing the inline images.
+func (s *Server) messageDetail(r *http.Request, msg sqlcgen.Message) oapi.MessageDetail {
 	detail := mapMessageDetail(msg)
-	atts, err := s.messages.Attachments(r.Context(), messageID)
+	atts, err := s.messages.Attachments(r.Context(), msg.ID)
 	if err == nil {
 		list := make([]oapi.Attachment, 0, len(atts))
 		for _, att := range atts {
@@ -80,7 +88,7 @@ func (s *Server) GetMessage(w http.ResponseWriter, r *http.Request, id oapi.Mess
 		detail.Attachments = &list
 	}
 	s.enrichOne(r, &detail)
-	writeJSON(w, http.StatusOK, detail)
+	return detail
 }
 
 func (s *Server) GetMessageBody(w http.ResponseWriter, r *http.Request, id oapi.MessageID) {
@@ -195,7 +203,7 @@ func (s *Server) UpdateMessage(w http.ResponseWriter, r *http.Request, id oapi.M
 		s.internal(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, mapMessageDetail(msg))
+	writeJSON(w, http.StatusOK, s.messageDetail(r, msg))
 }
 
 func (s *Server) MoveMessage(w http.ResponseWriter, r *http.Request, id oapi.MessageID) {

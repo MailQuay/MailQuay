@@ -186,6 +186,43 @@ func TestHTTPAuthAndAccountFlow(t *testing.T) {
 	if _, ok := tree["accounts"].([]any); !ok {
 		t.Fatalf("tree = %+v", tree)
 	}
+
+	var mailboxID, messageID string
+	if err := conn.QueryRow(ctx, `INSERT INTO mailboxes (id, account_id, path, name, role)
+		VALUES (gen_random_uuid(), $1, 'INBOX', 'INBOX', 'inbox') RETURNING id`, account["id"]).Scan(&mailboxID); err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.QueryRow(ctx, `INSERT INTO messages (id, account_id, mailbox_id, dedupe_key, received_at, subject)
+		VALUES (gen_random_uuid(), $1, $2, 'patch-detail', now(), 'Patch detail') RETURNING id`, account["id"], mailboxID).Scan(&messageID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(ctx, `INSERT INTO attachments (id, message_id, part_path, filename, content_type, size, content_id)
+		VALUES (gen_random_uuid(), $1, '1', 'inline.png', 'image/png', 10, 'inline-cid')`, messageID); err != nil {
+		t.Fatal(err)
+	}
+	detail := getJSON(t, client, base+"/messages/"+messageID)
+	assertDetail := func(label string, payload map[string]any) {
+		t.Helper()
+		attachments, _ := payload["attachments"].([]any)
+		if len(attachments) != 1 {
+			t.Fatalf("%s attachments = %v, want 1", label, payload["attachments"])
+		}
+		if payload["accountEmail"] != "api@example.com" || payload["mailboxPath"] != "INBOX" {
+			t.Fatalf("%s enrichment = %v / %v", label, payload["accountEmail"], payload["mailboxPath"])
+		}
+	}
+	assertDetail("get", detail)
+	resp = sendJSON(t, client, http.MethodPatch, base+"/messages/"+messageID, map[string]any{}, csrf)
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("patch message %d: %s", resp.StatusCode, body)
+	}
+	var patched map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&patched); err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	assertDetail("patch", patched)
 }
 
 func mustKey(t *testing.T) string {

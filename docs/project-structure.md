@@ -579,11 +579,11 @@ frontend/
 | `GET` | `/mailboxes/{id}` | 文件夹详情与同步状态 |
 | `POST` | `/mailboxes/{id}/sync` | 同步单个文件夹 |
 | `GET` | `/messages` | 列表, 支持 `accountId`, `mailboxId`, `view=all|unread|marked`, `cursor` |
-| `GET` | `/messages/{id}` | 元数据与标志 |
+| `GET` | `/messages/{id}` | 完整详情: 元数据, 标志, 附件, 账号和文件夹信息 |
 | `GET` | `/messages/{id}/body` | 解析后的正文, 首次触发远端拉取 |
 | `GET` | `/messages/{id}/raw` | 原始 MIME 下载 |
 | `GET` | `/messages/{id}/attachments/{attachmentId}` | 附件下载 |
-| `PATCH` | `/messages/{id}` | 更新已读, 本地标记等状态; 归档使用独立动作 |
+| `PATCH` | `/messages/{id}` | 更新已读, 本地标记等状态并返回完整详情; 归档使用独立动作 |
 | `POST` | `/messages/{id}/move` | 移动到目标文件夹 |
 | `DELETE` | `/messages/{id}` | 按删除设置移入 Trash 或写入删除队列 |
 | `POST` | `/messages/{id}/archive` | 复制完整邮件到本地归档 |
