@@ -89,17 +89,6 @@ func (q *Queries) CountMessagesInMailbox(ctx context.Context, mailboxID uuid.UUI
 	return count, err
 }
 
-const countOutboxActive = `-- name: CountOutboxActive :one
-SELECT count(*) FROM outbox WHERE status IN ('scheduled', 'pending', 'sending', 'failed', 'copy_failed')
-`
-
-func (q *Queries) CountOutboxActive(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countOutboxActive)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const countUnifiedAll = `-- name: CountUnifiedAll :one
 SELECT count(DISTINCT (m.account_id, m.dedupe_key))
 FROM messages m JOIN mailboxes mb ON mb.id = m.mailbox_id

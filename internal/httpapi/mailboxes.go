@@ -16,7 +16,7 @@ func (s *Server) GetMailboxTree(w http.ResponseWriter, r *http.Request) {
 		Accounts: make([]oapi.AccountMailboxes, 0, len(tree.Accounts)),
 		Counts: oapi.MailboxCounts{
 			All: int(tree.Counts.All), Unread: int(tree.Counts.Unread), Marked: int(tree.Counts.Marked),
-			Drafts: int(tree.Counts.Drafts), Sending: int(tree.Counts.Sending), Sent: int(tree.Counts.Sent), Trash: int(tree.Counts.Trash),
+			Drafts: int(tree.Counts.Drafts), Sent: int(tree.Counts.Sent), Trash: int(tree.Counts.Trash),
 		},
 	}
 	for _, group := range tree.Accounts {

@@ -20,13 +20,12 @@ var ErrNotFound = errors.New("mailbox not found")
 
 // Counts is the global sidebar counter set.
 type Counts struct {
-	All     int64 `json:"all"`
-	Unread  int64 `json:"unread"`
-	Marked  int64 `json:"marked"`
-	Drafts  int64 `json:"drafts"`
-	Sending int64 `json:"sending"`
-	Sent    int64 `json:"sent"`
-	Trash   int64 `json:"trash"`
+	All    int64 `json:"all"`
+	Unread int64 `json:"unread"`
+	Marked int64 `json:"marked"`
+	Drafts int64 `json:"drafts"`
+	Sent   int64 `json:"sent"`
+	Trash  int64 `json:"trash"`
 }
 
 // AccountGroup is one sidebar account section.
@@ -110,9 +109,6 @@ func (s *Service) counts(ctx context.Context) (Counts, error) {
 	}
 	if v, err := s.store.CountDrafts(ctx); err == nil {
 		c.Drafts = v
-	}
-	if v, err := s.store.CountOutboxActive(ctx); err == nil {
-		c.Sending = v
 	}
 	if v, err := s.store.CountByMailboxRole(ctx, "sent"); err == nil {
 		c.Sent = v

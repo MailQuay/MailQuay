@@ -835,13 +835,12 @@ type MailboxSyncState string
 
 // MailboxCounts defines model for MailboxCounts.
 type MailboxCounts struct {
-	All     int `json:"all"`
-	Drafts  int `json:"drafts"`
-	Marked  int `json:"marked"`
-	Sending int `json:"sending"`
-	Sent    int `json:"sent"`
-	Trash   int `json:"trash"`
-	Unread  int `json:"unread"`
+	All    int `json:"all"`
+	Drafts int `json:"drafts"`
+	Marked int `json:"marked"`
+	Sent   int `json:"sent"`
+	Trash  int `json:"trash"`
+	Unread int `json:"unread"`
 }
 
 // MailboxTree defines model for MailboxTree.

@@ -191,9 +191,6 @@ WHERE m.preserved_at IS NULL AND mb.role NOT IN ('sent', 'drafts', 'trash')
 -- name: CountDrafts :one
 SELECT count(*) FROM drafts WHERE status <> 'sent';
 
--- name: CountOutboxActive :one
-SELECT count(*) FROM outbox WHERE status IN ('scheduled', 'pending', 'sending', 'failed', 'copy_failed');
-
 -- name: CountByMailboxRole :one
 SELECT COALESCE(sum(mb.total), 0)::bigint FROM mailboxes mb WHERE mb.role = $1;
 

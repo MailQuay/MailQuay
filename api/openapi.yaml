@@ -1474,10 +1474,9 @@ components:
         unread: { type: integer }
         marked: { type: integer }
         drafts: { type: integer }
-        sending: { type: integer }
         sent: { type: integer }
         trash: { type: integer }
-      required: [all, unread, marked, drafts, sending, sent, trash]
+      required: [all, unread, marked, drafts, sent, trash]
     MailboxTree:
       type: object
       properties:
