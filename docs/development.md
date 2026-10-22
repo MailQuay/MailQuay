@@ -220,7 +220,7 @@ MAILQUAY_TEST_DATABASE_URL='postgres://mailquay:mailquay@127.0.0.1:5432/mailquay
 - IMAP 使用 `go-imap` 的服务端包或 GreenMail 容器模拟, 覆盖初次同步, 增量, 删除, 标志和 UIDVALIDITY 变化.
 - 初始同步覆盖 `all`, `1d`, `3d`, `1w`, `1m`, `1y` 六种范围, 断言 cutoff 过滤, 后台任务进度, 以及中断后继续.
 - 下载范围覆盖 `headers`, `full_no_attachments`, `full_with_attachments`, 断言仅头模式不缓存正文, 无附件模式按需拉附件, 完整模式缓存附件.
-- 全部视图测试覆盖排除已发送, 草稿和垃圾箱, 并按账号加 Message-ID 去重.
+- 全部视图测试覆盖排除已发送, 草稿和已删除, 并按账号加 Message-ID 去重.
 - POP3 使用 GreenMail 或 Dovecot 测试实例, 覆盖 UIDL 增量, TOP 缺失, RETR, DELE 与 QUIT 提交, 以及轮询去重.
 - SMTP 使用 Mailpit 或本地 sink 捕获邮件, 断言 MIME 结构, 附件和重试.
 - 登录测试覆盖用户名和密码, 不涉及邮箱绑定或邮件验证码, 以及后续 OAuth2 登录的预留边界.
@@ -379,6 +379,7 @@ docker compose -f docker-compose-dev.yml up -d --build
 - 数据目录使用宿主机绑定挂载: 数据库为 `../pg_data` (uid 70, 权限 750), 运行数据为 `../data/dev` (uid 100). 首次启动前创建并 chown, 否则容器用户无法写入.
 - 修改前端依赖后重新构建镜像, 不需要在宿主机执行 `pnpm install`.
 - 默认数据库密码和主密钥只用于本地; 暴露到其他主机前必须覆盖 `POSTGRES_PASSWORD` 和 `MAILQUAY_SECRET_KEY`.
+- 开发栈的库名由 `.env` 的 `MAILQUAY_DB_NAME` 控制, 默认 `mailquay`. 需要干净的数据库时执行 `scripts/new-database.sh [库名]`: 脚本创建新库, 应用迁移, 写入 `.env` 并重建应用容器; 旧库保留在同一个 PostgreSQL 实例中, 把 `MAILQUAY_DB_NAME` 改回去即可恢复.
 - Windows 和 macOS 用户使用独立二进制, 不使用容器.
 - Compose 示例固定到具体版本, 不覆盖用户已有 `.env`.
 

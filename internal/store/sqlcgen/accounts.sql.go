@@ -7,6 +7,7 @@ package sqlcgen
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -30,46 +31,50 @@ INSERT INTO accounts (
     imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security,
     smtp_username, smtp_password_enc,
     smtp_helo_hostname, sync_enabled, initial_sync_range, download_scope,
-    initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server
+    initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server,
+    auto_detect_special_folders, special_folders
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7,
     $8, $9, $10, $11,
     $12, $13, $14, $15, $16, $17,
     $18, $19,
     $20, $21, $22, $23,
-    $24, $25, $26, $27
+    $24, $25, $26, $27,
+    $28, $29
 )
-RETURNING id, name, email, provider, username, auth_type, password_enc, oauth_provider, oauth_scopes, oauth_refresh_enc, receive_protocol, imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security, smtp_helo_hostname, sync_enabled, sync_state, last_error, initial_sync_range, download_scope, initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server, deleted_at, created_at, updated_at, smtp_username, smtp_password_enc
+RETURNING id, name, email, provider, username, auth_type, password_enc, oauth_provider, oauth_scopes, oauth_refresh_enc, receive_protocol, imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security, smtp_helo_hostname, sync_enabled, sync_state, last_error, initial_sync_range, download_scope, initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server, deleted_at, created_at, updated_at, smtp_username, smtp_password_enc, auto_detect_special_folders, special_folders
 `
 
 type CreateAccountParams struct {
-	ID                  uuid.UUID  `json:"id"`
-	Name                string     `json:"name"`
-	Email               string     `json:"email"`
-	Provider            string     `json:"provider"`
-	Username            string     `json:"username"`
-	AuthType            string     `json:"auth_type"`
-	PasswordEnc         []byte     `json:"password_enc"`
-	OauthProvider       *string    `json:"oauth_provider"`
-	OauthScopes         []string   `json:"oauth_scopes"`
-	OauthRefreshEnc     []byte     `json:"oauth_refresh_enc"`
-	ReceiveProtocol     string     `json:"receive_protocol"`
-	ImapAddr            *string    `json:"imap_addr"`
-	ImapSecurity        string     `json:"imap_security"`
-	Pop3Addr            *string    `json:"pop3_addr"`
-	Pop3Security        string     `json:"pop3_security"`
-	SmtpAddr            *string    `json:"smtp_addr"`
-	SmtpSecurity        string     `json:"smtp_security"`
-	SmtpUsername        *string    `json:"smtp_username"`
-	SmtpPasswordEnc     []byte     `json:"smtp_password_enc"`
-	SmtpHeloHostname    string     `json:"smtp_helo_hostname"`
-	SyncEnabled         bool       `json:"sync_enabled"`
-	InitialSyncRange    string     `json:"initial_sync_range"`
-	DownloadScope       string     `json:"download_scope"`
-	InitialSyncCutoffAt *time.Time `json:"initial_sync_cutoff_at"`
-	SentCopyMode        string     `json:"sent_copy_mode"`
-	Pop3LeaveOnServer   bool       `json:"pop3_leave_on_server"`
-	Pop3DeleteOnServer  bool       `json:"pop3_delete_on_server"`
+	ID                       uuid.UUID       `json:"id"`
+	Name                     string          `json:"name"`
+	Email                    string          `json:"email"`
+	Provider                 string          `json:"provider"`
+	Username                 string          `json:"username"`
+	AuthType                 string          `json:"auth_type"`
+	PasswordEnc              []byte          `json:"password_enc"`
+	OauthProvider            *string         `json:"oauth_provider"`
+	OauthScopes              []string        `json:"oauth_scopes"`
+	OauthRefreshEnc          []byte          `json:"oauth_refresh_enc"`
+	ReceiveProtocol          string          `json:"receive_protocol"`
+	ImapAddr                 *string         `json:"imap_addr"`
+	ImapSecurity             string          `json:"imap_security"`
+	Pop3Addr                 *string         `json:"pop3_addr"`
+	Pop3Security             string          `json:"pop3_security"`
+	SmtpAddr                 *string         `json:"smtp_addr"`
+	SmtpSecurity             string          `json:"smtp_security"`
+	SmtpUsername             *string         `json:"smtp_username"`
+	SmtpPasswordEnc          []byte          `json:"smtp_password_enc"`
+	SmtpHeloHostname         string          `json:"smtp_helo_hostname"`
+	SyncEnabled              bool            `json:"sync_enabled"`
+	InitialSyncRange         string          `json:"initial_sync_range"`
+	DownloadScope            string          `json:"download_scope"`
+	InitialSyncCutoffAt      *time.Time      `json:"initial_sync_cutoff_at"`
+	SentCopyMode             string          `json:"sent_copy_mode"`
+	Pop3LeaveOnServer        bool            `json:"pop3_leave_on_server"`
+	Pop3DeleteOnServer       bool            `json:"pop3_delete_on_server"`
+	AutoDetectSpecialFolders bool            `json:"auto_detect_special_folders"`
+	SpecialFolders           json.RawMessage `json:"special_folders"`
 }
 
 func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (Account, error) {
@@ -101,6 +106,8 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (A
 		arg.SentCopyMode,
 		arg.Pop3LeaveOnServer,
 		arg.Pop3DeleteOnServer,
+		arg.AutoDetectSpecialFolders,
+		arg.SpecialFolders,
 	)
 	var i Account
 	err := row.Scan(
@@ -136,12 +143,14 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (A
 		&i.UpdatedAt,
 		&i.SmtpUsername,
 		&i.SmtpPasswordEnc,
+		&i.AutoDetectSpecialFolders,
+		&i.SpecialFolders,
 	)
 	return i, err
 }
 
 const getAccount = `-- name: GetAccount :one
-SELECT id, name, email, provider, username, auth_type, password_enc, oauth_provider, oauth_scopes, oauth_refresh_enc, receive_protocol, imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security, smtp_helo_hostname, sync_enabled, sync_state, last_error, initial_sync_range, download_scope, initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server, deleted_at, created_at, updated_at, smtp_username, smtp_password_enc FROM accounts WHERE id = $1
+SELECT id, name, email, provider, username, auth_type, password_enc, oauth_provider, oauth_scopes, oauth_refresh_enc, receive_protocol, imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security, smtp_helo_hostname, sync_enabled, sync_state, last_error, initial_sync_range, download_scope, initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server, deleted_at, created_at, updated_at, smtp_username, smtp_password_enc, auto_detect_special_folders, special_folders FROM accounts WHERE id = $1
 `
 
 func (q *Queries) GetAccount(ctx context.Context, id uuid.UUID) (Account, error) {
@@ -180,6 +189,8 @@ func (q *Queries) GetAccount(ctx context.Context, id uuid.UUID) (Account, error)
 		&i.UpdatedAt,
 		&i.SmtpUsername,
 		&i.SmtpPasswordEnc,
+		&i.AutoDetectSpecialFolders,
+		&i.SpecialFolders,
 	)
 	return i, err
 }
@@ -194,7 +205,7 @@ func (q *Queries) HardDeleteAccount(ctx context.Context, id uuid.UUID) error {
 }
 
 const listAccounts = `-- name: ListAccounts :many
-SELECT id, name, email, provider, username, auth_type, password_enc, oauth_provider, oauth_scopes, oauth_refresh_enc, receive_protocol, imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security, smtp_helo_hostname, sync_enabled, sync_state, last_error, initial_sync_range, download_scope, initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server, deleted_at, created_at, updated_at, smtp_username, smtp_password_enc FROM accounts WHERE deleted_at IS NULL ORDER BY created_at, id
+SELECT id, name, email, provider, username, auth_type, password_enc, oauth_provider, oauth_scopes, oauth_refresh_enc, receive_protocol, imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security, smtp_helo_hostname, sync_enabled, sync_state, last_error, initial_sync_range, download_scope, initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server, deleted_at, created_at, updated_at, smtp_username, smtp_password_enc, auto_detect_special_folders, special_folders FROM accounts WHERE deleted_at IS NULL ORDER BY created_at, id
 `
 
 func (q *Queries) ListAccounts(ctx context.Context) ([]Account, error) {
@@ -239,6 +250,8 @@ func (q *Queries) ListAccounts(ctx context.Context) ([]Account, error) {
 			&i.UpdatedAt,
 			&i.SmtpUsername,
 			&i.SmtpPasswordEnc,
+			&i.AutoDetectSpecialFolders,
+			&i.SpecialFolders,
 		); err != nil {
 			return nil, err
 		}
@@ -251,7 +264,7 @@ func (q *Queries) ListAccounts(ctx context.Context) ([]Account, error) {
 }
 
 const listActiveAccounts = `-- name: ListActiveAccounts :many
-SELECT id, name, email, provider, username, auth_type, password_enc, oauth_provider, oauth_scopes, oauth_refresh_enc, receive_protocol, imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security, smtp_helo_hostname, sync_enabled, sync_state, last_error, initial_sync_range, download_scope, initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server, deleted_at, created_at, updated_at, smtp_username, smtp_password_enc FROM accounts WHERE deleted_at IS NULL AND sync_enabled ORDER BY created_at, id
+SELECT id, name, email, provider, username, auth_type, password_enc, oauth_provider, oauth_scopes, oauth_refresh_enc, receive_protocol, imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security, smtp_helo_hostname, sync_enabled, sync_state, last_error, initial_sync_range, download_scope, initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server, deleted_at, created_at, updated_at, smtp_username, smtp_password_enc, auto_detect_special_folders, special_folders FROM accounts WHERE deleted_at IS NULL AND sync_enabled ORDER BY created_at, id
 `
 
 func (q *Queries) ListActiveAccounts(ctx context.Context) ([]Account, error) {
@@ -296,6 +309,8 @@ func (q *Queries) ListActiveAccounts(ctx context.Context) ([]Account, error) {
 			&i.UpdatedAt,
 			&i.SmtpUsername,
 			&i.SmtpPasswordEnc,
+			&i.AutoDetectSpecialFolders,
+			&i.SpecialFolders,
 		); err != nil {
 			return nil, err
 		}
@@ -308,7 +323,7 @@ func (q *Queries) ListActiveAccounts(ctx context.Context) ([]Account, error) {
 }
 
 const listDeletedAccounts = `-- name: ListDeletedAccounts :many
-SELECT id, name, email, provider, username, auth_type, password_enc, oauth_provider, oauth_scopes, oauth_refresh_enc, receive_protocol, imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security, smtp_helo_hostname, sync_enabled, sync_state, last_error, initial_sync_range, download_scope, initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server, deleted_at, created_at, updated_at, smtp_username, smtp_password_enc FROM accounts WHERE deleted_at IS NOT NULL ORDER BY deleted_at
+SELECT id, name, email, provider, username, auth_type, password_enc, oauth_provider, oauth_scopes, oauth_refresh_enc, receive_protocol, imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security, smtp_helo_hostname, sync_enabled, sync_state, last_error, initial_sync_range, download_scope, initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server, deleted_at, created_at, updated_at, smtp_username, smtp_password_enc, auto_detect_special_folders, special_folders FROM accounts WHERE deleted_at IS NOT NULL ORDER BY deleted_at
 `
 
 func (q *Queries) ListDeletedAccounts(ctx context.Context) ([]Account, error) {
@@ -353,6 +368,8 @@ func (q *Queries) ListDeletedAccounts(ctx context.Context) ([]Account, error) {
 			&i.UpdatedAt,
 			&i.SmtpUsername,
 			&i.SmtpPasswordEnc,
+			&i.AutoDetectSpecialFolders,
+			&i.SpecialFolders,
 		); err != nil {
 			return nil, err
 		}
@@ -413,38 +430,41 @@ UPDATE accounts SET
     smtp_helo_hostname = $19, sync_enabled = $20,
     initial_sync_range = $21, download_scope = $22, initial_sync_cutoff_at = $23,
     sent_copy_mode = $24, pop3_leave_on_server = $25, pop3_delete_on_server = $26,
+    auto_detect_special_folders = $27, special_folders = $28,
     updated_at = now()
 WHERE id = $1
-RETURNING id, name, email, provider, username, auth_type, password_enc, oauth_provider, oauth_scopes, oauth_refresh_enc, receive_protocol, imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security, smtp_helo_hostname, sync_enabled, sync_state, last_error, initial_sync_range, download_scope, initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server, deleted_at, created_at, updated_at, smtp_username, smtp_password_enc
+RETURNING id, name, email, provider, username, auth_type, password_enc, oauth_provider, oauth_scopes, oauth_refresh_enc, receive_protocol, imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security, smtp_helo_hostname, sync_enabled, sync_state, last_error, initial_sync_range, download_scope, initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server, deleted_at, created_at, updated_at, smtp_username, smtp_password_enc, auto_detect_special_folders, special_folders
 `
 
 type UpdateAccountParams struct {
-	ID                  uuid.UUID  `json:"id"`
-	Name                string     `json:"name"`
-	Email               string     `json:"email"`
-	Username            string     `json:"username"`
-	AuthType            string     `json:"auth_type"`
-	PasswordEnc         []byte     `json:"password_enc"`
-	OauthProvider       *string    `json:"oauth_provider"`
-	OauthScopes         []string   `json:"oauth_scopes"`
-	OauthRefreshEnc     []byte     `json:"oauth_refresh_enc"`
-	ReceiveProtocol     string     `json:"receive_protocol"`
-	ImapAddr            *string    `json:"imap_addr"`
-	ImapSecurity        string     `json:"imap_security"`
-	Pop3Addr            *string    `json:"pop3_addr"`
-	Pop3Security        string     `json:"pop3_security"`
-	SmtpAddr            *string    `json:"smtp_addr"`
-	SmtpSecurity        string     `json:"smtp_security"`
-	SmtpUsername        *string    `json:"smtp_username"`
-	SmtpPasswordEnc     []byte     `json:"smtp_password_enc"`
-	SmtpHeloHostname    string     `json:"smtp_helo_hostname"`
-	SyncEnabled         bool       `json:"sync_enabled"`
-	InitialSyncRange    string     `json:"initial_sync_range"`
-	DownloadScope       string     `json:"download_scope"`
-	InitialSyncCutoffAt *time.Time `json:"initial_sync_cutoff_at"`
-	SentCopyMode        string     `json:"sent_copy_mode"`
-	Pop3LeaveOnServer   bool       `json:"pop3_leave_on_server"`
-	Pop3DeleteOnServer  bool       `json:"pop3_delete_on_server"`
+	ID                       uuid.UUID       `json:"id"`
+	Name                     string          `json:"name"`
+	Email                    string          `json:"email"`
+	Username                 string          `json:"username"`
+	AuthType                 string          `json:"auth_type"`
+	PasswordEnc              []byte          `json:"password_enc"`
+	OauthProvider            *string         `json:"oauth_provider"`
+	OauthScopes              []string        `json:"oauth_scopes"`
+	OauthRefreshEnc          []byte          `json:"oauth_refresh_enc"`
+	ReceiveProtocol          string          `json:"receive_protocol"`
+	ImapAddr                 *string         `json:"imap_addr"`
+	ImapSecurity             string          `json:"imap_security"`
+	Pop3Addr                 *string         `json:"pop3_addr"`
+	Pop3Security             string          `json:"pop3_security"`
+	SmtpAddr                 *string         `json:"smtp_addr"`
+	SmtpSecurity             string          `json:"smtp_security"`
+	SmtpUsername             *string         `json:"smtp_username"`
+	SmtpPasswordEnc          []byte          `json:"smtp_password_enc"`
+	SmtpHeloHostname         string          `json:"smtp_helo_hostname"`
+	SyncEnabled              bool            `json:"sync_enabled"`
+	InitialSyncRange         string          `json:"initial_sync_range"`
+	DownloadScope            string          `json:"download_scope"`
+	InitialSyncCutoffAt      *time.Time      `json:"initial_sync_cutoff_at"`
+	SentCopyMode             string          `json:"sent_copy_mode"`
+	Pop3LeaveOnServer        bool            `json:"pop3_leave_on_server"`
+	Pop3DeleteOnServer       bool            `json:"pop3_delete_on_server"`
+	AutoDetectSpecialFolders bool            `json:"auto_detect_special_folders"`
+	SpecialFolders           json.RawMessage `json:"special_folders"`
 }
 
 func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) (Account, error) {
@@ -475,6 +495,8 @@ func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) (A
 		arg.SentCopyMode,
 		arg.Pop3LeaveOnServer,
 		arg.Pop3DeleteOnServer,
+		arg.AutoDetectSpecialFolders,
+		arg.SpecialFolders,
 	)
 	var i Account
 	err := row.Scan(
@@ -510,6 +532,8 @@ func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) (A
 		&i.UpdatedAt,
 		&i.SmtpUsername,
 		&i.SmtpPasswordEnc,
+		&i.AutoDetectSpecialFolders,
+		&i.SpecialFolders,
 	)
 	return i, err
 }

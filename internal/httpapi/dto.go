@@ -10,6 +10,7 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
 	"github.com/mailquay/mailquay/internal/httpapi/oapi"
+	"github.com/mailquay/mailquay/internal/mailbox"
 	"github.com/mailquay/mailquay/internal/store/sqlcgen"
 )
 
@@ -41,7 +42,9 @@ func mapAccount(a sqlcgen.Account, identities []sqlcgen.Identity) oapi.Account {
 		DownloadScope:     oapi.AccountDownloadScope(a.DownloadScope),
 		SentCopyMode:      oapi.AccountSentCopyMode(a.SentCopyMode),
 		Pop3LeaveOnServer: boolPtr(a.Pop3LeaveOnServer), Pop3DeleteOnServer: boolPtr(a.Pop3DeleteOnServer),
-		State: oapi.AccountState(state), LastError: strPtr(a.LastError), CreatedAt: a.CreatedAt.UTC(),
+		AutoDetectSpecialFolders: boolPtr(a.AutoDetectSpecialFolders),
+		SpecialFolders:           mapSpecialFolders(a.SpecialFolders),
+		State:                    oapi.AccountState(state), LastError: strPtr(a.LastError), CreatedAt: a.CreatedAt.UTC(),
 	}
 	if a.OauthProvider != nil {
 		out.OauthProvider = a.OauthProvider
@@ -358,3 +361,24 @@ func parseCursorLimit(limit *int, cursor *string) (string, int) {
 
 var _ = strconv.Itoa
 var _ = time.Now
+
+func mapSpecialFolders(raw []byte) *oapi.SpecialFolders {
+	values := mailbox.ParseSpecialFolders(raw)
+	out := &oapi.SpecialFolders{}
+	if value, ok := values["sent"]; ok {
+		out.Sent = &value
+	}
+	if value, ok := values["drafts"]; ok {
+		out.Drafts = &value
+	}
+	if value, ok := values["trash"]; ok {
+		out.Trash = &value
+	}
+	if value, ok := values["junk"]; ok {
+		out.Junk = &value
+	}
+	if value, ok := values["archive"]; ok {
+		out.Archive = &value
+	}
+	return out
+}

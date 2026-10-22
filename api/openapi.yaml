@@ -1296,11 +1296,21 @@ components:
         pop3DeleteOnServer: { type: boolean }
         state: { type: string, enum: [connected, disconnected, syncing, error] }
         lastError: { type: string }
+        autoDetectSpecialFolders: { type: boolean }
+        specialFolders: { $ref: '#/components/schemas/SpecialFolders' }
         createdAt: { type: string, format: date-time }
         identities:
           type: array
           items: { $ref: '#/components/schemas/Identity' }
       required: [id, name, email, provider, username, authType, receiveProtocol, syncEnabled, initialSyncRange, downloadScope, sentCopyMode, state, createdAt]
+    SpecialFolders:
+      type: object
+      properties:
+        sent: { type: string }
+        drafts: { type: string }
+        trash: { type: string }
+        junk: { type: string }
+        archive: { type: string }
     AccountInput:
       type: object
       properties:
@@ -1328,6 +1338,8 @@ components:
         sentCopyMode: { type: string, enum: [auto, append, none] }
         pop3LeaveOnServer: { type: boolean }
         pop3DeleteOnServer: { type: boolean }
+        autoDetectSpecialFolders: { type: boolean }
+        specialFolders: { $ref: '#/components/schemas/SpecialFolders' }
       required: [name, email, username, authType, receiveProtocol]
     DiscoveryRequest:
       type: object

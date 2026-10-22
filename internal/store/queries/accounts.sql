@@ -5,14 +5,16 @@ INSERT INTO accounts (
     imap_addr, imap_security, pop3_addr, pop3_security, smtp_addr, smtp_security,
     smtp_username, smtp_password_enc,
     smtp_helo_hostname, sync_enabled, initial_sync_range, download_scope,
-    initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server
+    initial_sync_cutoff_at, sent_copy_mode, pop3_leave_on_server, pop3_delete_on_server,
+    auto_detect_special_folders, special_folders
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7,
     $8, $9, $10, $11,
     $12, $13, $14, $15, $16, $17,
     $18, $19,
     $20, $21, $22, $23,
-    $24, $25, $26, $27
+    $24, $25, $26, $27,
+    $28, $29
 )
 RETURNING *;
 
@@ -36,6 +38,7 @@ UPDATE accounts SET
     smtp_helo_hostname = $19, sync_enabled = $20,
     initial_sync_range = $21, download_scope = $22, initial_sync_cutoff_at = $23,
     sent_copy_mode = $24, pop3_leave_on_server = $25, pop3_delete_on_server = $26,
+    auto_detect_special_folders = $27, special_folders = $28,
     updated_at = now()
 WHERE id = $1
 RETURNING *;

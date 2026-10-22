@@ -126,11 +126,11 @@ func (s *Service) counts(ctx context.Context) (Counts, error) {
 // UpsertFromFolders stores a discovered IMAP folder set and returns the
 // resulting mailboxes keyed by path. All Mail folders are skipped.
 func (s *Service) UpsertFromFolders(ctx context.Context, accountID uuid.UUID, folders []imapclient.Folder) ([]sqlcgen.Mailbox, error) {
-	roles := AssignRoles(folders)
+	resolved := AssignRoles(folders, s.folderConfig(ctx, accountID))
 	out := make([]sqlcgen.Mailbox, 0, len(folders))
 	for i, folder := range folders {
-		role := roles[i]
-		if role == "" {
+		resolvedRole := resolved[i]
+		if resolvedRole.Skip {
 			continue
 		}
 		attrs, _ := json.Marshal(folder.Attributes)
@@ -140,10 +140,10 @@ func (s *Service) UpsertFromFolders(ctx context.Context, accountID uuid.UUID, fo
 			Path:          folder.Path,
 			Name:          folder.Name,
 			Delimiter:     folder.Delimiter,
-			Role:          role,
+			Role:          resolvedRole.Role,
 			Attributes:    attrs,
 			LocalOnly:     false,
-			SyncMode:      defaultSyncMode(role),
+			SyncMode:      defaultSyncMode(resolvedRole.Role),
 			Uidvalidity:   nil,
 			Uidnext:       nil,
 			Highestmodseq: nil,
@@ -153,7 +153,83 @@ func (s *Service) UpsertFromFolders(ctx context.Context, accountID uuid.UUID, fo
 		}
 		out = append(out, mb)
 	}
+	// A local fallback folder (Sent or Drafts) may still hold a role that a
+	// remote folder now owns.
+	if err := s.ApplySpecialFolders(ctx, accountID); err != nil {
+		return nil, err
+	}
 	return out, nil
+}
+
+// ApplySpecialFolders re-resolves the role of every stored remote folder after
+// the account special folder settings change. It lets the sidebar and the
+// delete target follow the new configuration without waiting for a sync pass.
+func (s *Service) ApplySpecialFolders(ctx context.Context, accountID uuid.UUID) error {
+	acct, err := s.store.GetAccount(ctx, accountID)
+	if err != nil {
+		return fmt.Errorf("load account: %w", err)
+	}
+	if acct.ReceiveProtocol != "imap" {
+		return nil
+	}
+	rows, err := s.store.ListMailboxes(ctx, accountID)
+	if err != nil {
+		return fmt.Errorf("list mailboxes: %w", err)
+	}
+	folders := make([]imapclient.Folder, 0, len(rows))
+	remote := make([]sqlcgen.Mailbox, 0, len(rows))
+	for _, mb := range rows {
+		if mb.LocalOnly {
+			continue
+		}
+		var attrs []string
+		_ = json.Unmarshal(mb.Attributes, &attrs)
+		folders = append(folders, imapclient.Folder{
+			Path: mb.Path, Name: mb.Name, Delimiter: mb.Delimiter, Attributes: attrs,
+		})
+		remote = append(remote, mb)
+	}
+	cfg := FolderConfig{AutoDetect: acct.AutoDetectSpecialFolders, SpecialFolders: ParseSpecialFolders(acct.SpecialFolders)}
+	resolved := AssignRoles(folders, cfg)
+	claimed := make(map[string]struct{}, len(SpecialRoleNames))
+	for i, role := range resolved {
+		if role.Skip {
+			continue
+		}
+		if remote[i].Role != role.Role {
+			if err := s.store.SetMailboxRole(ctx, sqlcgen.SetMailboxRoleParams{ID: remote[i].ID, Role: role.Role}); err != nil {
+				return fmt.Errorf("set mailbox role: %w", err)
+			}
+		}
+		if IsSpecialRole(role.Role) {
+			claimed[role.Role] = struct{}{}
+		}
+	}
+	for _, mb := range rows {
+		if !mb.LocalOnly || !IsSpecialRole(mb.Role) {
+			continue
+		}
+		if _, ok := claimed[mb.Role]; !ok {
+			continue
+		}
+		if err := s.store.SetMailboxRole(ctx, sqlcgen.SetMailboxRoleParams{ID: mb.ID, Role: "custom"}); err != nil {
+			return fmt.Errorf("demote local mailbox: %w", err)
+		}
+	}
+	return nil
+}
+
+// folderConfig loads the per-account special folder configuration. Missing
+// accounts keep automatic detection with no manual choices.
+func (s *Service) folderConfig(ctx context.Context, accountID uuid.UUID) FolderConfig {
+	cfg := FolderConfig{AutoDetect: true, SpecialFolders: map[string]string{}}
+	acct, err := s.store.GetAccount(ctx, accountID)
+	if err != nil {
+		return cfg
+	}
+	cfg.AutoDetect = acct.AutoDetectSpecialFolders
+	cfg.SpecialFolders = ParseSpecialFolders(acct.SpecialFolders)
+	return cfg
 }
 
 // EnsureMailbox creates a local folder when it does not exist.

@@ -23,6 +23,10 @@ import (
 var (
 	// ErrNotFound is returned for missing messages.
 	ErrNotFound = errors.New("message not found")
+	// ErrNoDeleteTarget is returned when an IMAP account has neither a Trash
+	// nor a Junk folder, so deleting would destroy the message instead of
+	// moving it. The account settings must point the Trash role at a folder.
+	ErrNoDeleteTarget = errors.New("no trash folder is configured for this account")
 	// ErrContentUnavailable means the body could not be fetched.
 	ErrContentUnavailable = errors.New("message content unavailable")
 )
@@ -397,7 +401,10 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 		// message there leaves it recoverable until the provider cleans it up.
 		target, targetErr = s.store.GetMailboxByRole(ctx, sqlcgen.GetMailboxByRoleParams{AccountID: msg.AccountID, Role: "junk"})
 	}
-	if targetErr == nil && mb.ID != target.ID {
+	if targetErr != nil {
+		return ErrNoDeleteTarget
+	}
+	if mb.ID != target.ID {
 		if err := s.Move(ctx, id, target.ID); err != nil {
 			return err
 		}

@@ -177,7 +177,7 @@ stateDiagram-v2
 
 初次同步:
 
-1. `LIST` 获取文件夹, 按名称和特殊用途标志映射角色: `inbox`, `sent`, `drafts`, `trash`, `junk`, `archive`. 每个角色只保留一个文件夹: 带对应特殊用途标志的优先, 其余同名文件夹降级为 `custom`; 否则侧边栏, 删除目标和全局计数会指向不确定的文件夹.
+1. `LIST` 获取文件夹并映射角色: `inbox`, `sent`, `drafts`, `trash`, `junk`, `archive`. 自动识别时顺序是特殊用途标志, 常见文件夹名称(含中英文), 最后按路径排序; 每个角色只保留一个文件夹, 其余降级为 `custom`, 否则侧边栏, 删除目标和全局计数会指向不确定的文件夹. 关闭自动识别后只使用账号配置的路径; 配置的路径不存在时该角色保持未识别, 不回退.
 2. 对每个启用的文件夹 `SELECT`, 记录 `UIDVALIDITY` 和 `UIDNEXT`.
 3. 按 UID 区间分批 `FETCH` 原始头 (`BODY.PEEK[HEADER]`), 标志, 大小和 `BODYSTRUCTURE`, 每批默认 50 封, 由设置 `envelope_batch_size` 控制.
 4. 本地解析头部的 `Message-ID`, `References`, `In-Reply-To`, 主题, 地址和日期, 归并线程; 不请求 IMAP `ENVELOPE`, 避免服务端的畸形结构拖垮整批.
@@ -243,7 +243,7 @@ POP3 没有文件夹, 服务端标志和 IDLE. 兼容层不模拟不存在的语
 - 轮询间隔由设置页的 POP3 轮询间隔控制, 默认 5 分钟; 没有 IDLE.
 - 已读, 标记, 归档只写本地, 不回传服务器.
 - 默认在服务器保留副本 (`pop3_leave_on_server=true`), 避免多个客户端或服务端其他设备丢信.
-- 删除默认只影响本地. 开启 `pop3_delete_on_server` 后, 移入垃圾箱或永久删除时执行 `DELE`, 并且必须在同一会话 `QUIT` 才提交; 失败进入重试.
+- 删除默认只影响本地. 开启 `pop3_delete_on_server` 后, 移入已删除文件夹或永久删除时执行 `DELE`, 并且必须在同一会话 `QUIT` 才提交; 失败进入重试.
 - 发送成功后无法 APPEND 到服务器 Sent, 在本地 Sent 文件夹保存副本.
 - UIDL 不可用时退化为 `Message-ID` + 日期 + 大小的哈希标识, 并在界面提示可能重复.
 - 同一邮箱同时配置 IMAP 和 POP3 会产生两份独立数据, 添加账号时警告, 不自动合并.
@@ -349,16 +349,16 @@ sequenceDiagram
 | 全局 | 已发送 | server `\Sent` | 所有账号的 Sent | pull-only, 全局开关 |
 | 全局 | 发送中 | local | `outbox` | 本地 |
 | 全局 | 草稿 | local + remote | `drafts`, 远端 `\Drafts` | 本地保存; 默认拉取, 可选镜像 |
-| 全局 | 垃圾箱 | server `\Trash` | 所有账号的 Trash | 只读或按文件夹策略 |
+| 全局 | 已删除 | server `\Trash` | 所有账号的 Trash | 只读或按文件夹策略 |
 | 全局 | 已标记 | virtual | `messages.local_flag` | 本地, 无标记时隐藏 |
 | 全局 | 本地归档 | local | `local_archives` | 独立本地存储 |
-| 每个邮箱 | 收件箱, 未读, 已发送, 草稿, 垃圾箱 | mixed | 重复显示该账号的系统文件夹 | 按文件夹策略 |
-| 每个邮箱 | 其他 | group | Junk, Archive, 标签, 自定义 | 按文件夹 |
+| 每个邮箱 | 收件箱, 未读, 已发送, 草稿, 已删除, 垃圾邮件 | mixed | 重复显示该账号的系统文件夹 | 按文件夹策略 |
+| 每个邮箱 | 其他 | group | Archive, 标签, 自定义 | 按文件夹 |
 
 - 全局收藏夹只放上述固定入口, 不放"其他".
-- 每个邮箱账号默认折叠; 展开后重复显示收件箱, 未读, 已发送, 草稿, 垃圾箱这些系统文件夹.
-- 不在系统文件夹中的 Junk, Archive, 服务商标签和自定义文件夹, 全部放入该组的"其他".
-- "其他"位于每个邮箱组最下面, 默认折叠, 展开状态按账号保存在本地; 包含 Junk, Archive, 服务商标签和自定义文件夹.
+- 每个邮箱账号默认折叠; 展开后重复显示收件箱, 未读, 已发送, 草稿, 已删除和垃圾邮件这些特殊文件夹.
+- 特殊用途标志或名称识别到的垃圾邮件文件夹单独显示, 不放进"其他"; Archive, 服务商标签和自定义文件夹放入该组的"其他".
+- "其他"位于每个邮箱组最下面, 默认折叠, 展开状态按账号保存在本地; 包含 Archive, 服务商标签和自定义文件夹.
 - 全部收件包含 Inbox, Junk 和自定义文件夹, 排除 Sent, Drafts 和 Trash. 虚拟视图按 `(account_id, dedupe_key)` 去重.
 - 去重键优先级: 服务商稳定消息 ID (如 IMAP 扩展 `X-GM-MSGID`), 规范化 Message-ID, 完整 MIME 的 `raw_sha256`, 最后退回 `mailbox_id + uid`.
 - 不把纯哈希当首选: 服务端可能重写头或换行, 哈希会变; 仅头部模式下也没有完整 MIME. 哈希只做兜底.
@@ -456,7 +456,8 @@ sequenceDiagram
 
 删除:
 
-- 默认 `delete_mode=provider_auto`: 删除动作把邮件移动到 Trash, 由邮件服务按自己的策略自动清理; 服务商没有 Trash 文件夹时回退到 Junk.
+- 账号保存 `auto_detect_special_folders` 和 `special_folders` (角色到远端路径); 关闭自动识别时只使用手动配置. 账号更新后立即按已存文件夹重算角色, 同步时再按 `LIST` 结果重新仲裁.
+- 默认 `delete_mode=provider_auto`: 删除动作把邮件移动到 Trash, 由邮件服务按自己的策略自动清理; 服务商没有 Trash 文件夹时回退到 Junk; 两者都没有时拒绝删除并返回 `delete_target_missing`, 不能静默永久删除.
 - 可选 `delete_mode=local_queue`: 邮件仍移动到 Trash, 同时写入 `delete_queue`, `delete_after = now + delete_queue_days`.
 - `delete_queue_days` 默认 30 天; 到期 worker 永久删除远端邮件和本地记录, 再删除搜索文档.
 - 服务端提前清理了 Trash 邮件时, worker 对账后把队列标记完成.

@@ -224,6 +224,20 @@ func (q *Queries) ResetMailboxUIDs(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const setMailboxRole = `-- name: SetMailboxRole :exec
+UPDATE mailboxes SET role = $2, updated_at = now() WHERE id = $1
+`
+
+type SetMailboxRoleParams struct {
+	ID   uuid.UUID `json:"id"`
+	Role string    `json:"role"`
+}
+
+func (q *Queries) SetMailboxRole(ctx context.Context, arg SetMailboxRoleParams) error {
+	_, err := q.db.Exec(ctx, setMailboxRole, arg.ID, arg.Role)
+	return err
+}
+
 const setMailboxSyncMode = `-- name: SetMailboxSyncMode :exec
 UPDATE mailboxes SET sync_mode = $2, updated_at = now() WHERE id = $1
 `

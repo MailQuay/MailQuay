@@ -242,6 +242,10 @@ func (s *Server) DeleteMessage(w http.ResponseWriter, r *http.Request, id oapi.M
 		if mapAccountError(err, w, r, s) {
 			return
 		}
+		if errors.Is(err, message.ErrNoDeleteTarget) {
+			s.error(w, r, http.StatusConflict, "delete_target_missing", err.Error())
+			return
+		}
 		s.internal(w, r, err)
 		return
 	}

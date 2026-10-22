@@ -83,6 +83,8 @@ MailQuay/
 │   └── questions/                   # 待确认问题, 按编号分隔
 ├── test/
 │   └── integration/                 # PostgreSQL, IMAP/POP3/SMTP 测试夹具
+├── scripts/
+│   └── new-database.sh              # 创建并切换到新的开发数据库
 └── .github/
     └── workflows/
         ├── ci.yml                   # lint, test, core/full 构建
@@ -97,7 +99,7 @@ MailQuay/
 | `internal/config` | 读取环境变量, 设置默认值, 启动时校验 | `platform` |
 | `internal/httpapi` | 路由, 中间件, 参数校验, 错误到 HTTP 的映射 | `auth`, `account`, `emclient`, `identity`, `mailbox`, `message`, `compose`, `search`, `events`, `store` |
 | `internal/auth` | 密码哈希, 会话, CSRF, OAuth2 授权码流程 | `store`, `crypto`, `platform` |
-| `internal/account` | 邮箱账号, 地址解析, 凭据加密, 连接测试, 同步策略, eM Client 导入会话 | `store`, `crypto`, `emclient`, `imapclient`, `pop3client`, `smtpclient`, `platform` |
+| `internal/account` | 邮箱账号, 地址解析, 凭据加密, 连接测试, 同步策略, 特殊文件夹配置, eM Client 导入会话 | `store`, `crypto`, `emclient`, `imapclient`, `pop3client`, `smtpclient`, `mailbox`, `platform` |
 | `internal/emclient` | 读取 eM Client 的 `accounts.dat`, 解密账号密码并输出与存储无关的账号结构 | 无内部依赖 |
 | `internal/identity` | 发件身份, 默认身份, 签名, 使用账号 SMTP | `store`, `account` |
 | `internal/mailbox` | 文件夹角色映射, 未读计数, 同步状态查询 | `store` |
@@ -254,7 +256,7 @@ frontend/
 │   已发送          │ (虚拟滚动)             │ 正文                           │
 │   发送中       1  │                       │                               │
 │   草稿         2  │                       │                               │
-│   垃圾箱          │                       │                               │
+│   已删除          │                       │                               │
 │   已标记       4  │                       │                               │
 │   本地归档        │                       │                               │
 │                  │                       │                               │
@@ -282,17 +284,17 @@ frontend/
 侧边栏结构:
 
 1. 侧边栏标题"邮件".
-2. 全局收藏夹分组: 可折叠, 默认展开; 条目为全部收件, 未读, 已发送, 发送中, 草稿, 垃圾箱, 已标记, 本地归档; 全局没有"其他".
+2. 全局收藏夹分组: 可折叠, 默认展开; 条目为全部收件, 未读, 已发送, 发送中, 草稿, 已删除, 已标记, 本地归档; 全局没有"其他".
 3. 邮箱账号列表: 每个账号一行, 显示邮箱和未读计数; 默认折叠, 点击展开. 同步失败时在未读数右侧显示红色三角形按钮, 点击打开错误浮层, 不触发展开或折叠.
-4. 展开账号后重复显示系统文件夹: 收件箱, 未读, 已发送, 草稿, 垃圾箱, 其他.
+4. 展开账号后重复显示系统文件夹: 收件箱, 未读, 已发送, 草稿, 已删除, 其他.
 5. 不在系统文件夹中的 Junk, Archive, 服务商标签和自定义文件夹, 全部放入该账号的"其他"; 其他在该组最下面, 默认折叠.
 6. 底部: 同步状态和设置入口; 不放主题和登录用户菜单.
 
 收藏夹规则:
 
-- 全部收件包含收件箱, 垃圾邮件和自定义文件夹, 排除已发送, 草稿和垃圾箱; 是本地联合视图并按 `(account_id, dedupe_key)` 去重.
+- 全部收件包含收件箱, 垃圾邮件和自定义文件夹, 排除已发送, 草稿和已删除; 是本地联合视图并按 `(account_id, dedupe_key)` 去重.
 - 未读使用与全部收件相同的范围; 已标记是本地标记视图, 不受该范围限制.
-- 已发送对应服务器 Sent, 只拉取; 发送中对应本地 outbox; 草稿对应本地草稿; 垃圾箱对应服务器 Trash.
+- 已发送对应服务器 Sent, 只拉取; 发送中对应本地 outbox; 草稿对应本地草稿; 已删除对应服务器 Trash.
 - 每个邮箱组展开后只显示系统文件夹; 其余服务器文件夹全部进入该账号的"其他".
 - 已标记数量为 0 时不显示该入口; 每个账号的展开状态和该账号"其他"的展开状态独立保存.
 - 标记邮件显示完整正文和附件; 账号删除后保留的邮件在列表中带"本地保留"标识.
@@ -426,7 +428,7 @@ frontend/
 | `/sent` | 已发送 |
 | `/sending` | 发送中 |
 | `/drafts` | 草稿 |
-| `/trash` | 垃圾箱 |
+| `/trash` | 已删除 |
 | `/marked` | 已标记 |
 | `/archive` | 本地归档 |
 | `/accounts/{accountId}/mailboxes/{mailboxId}` | 账号文件夹; 路径只定位到文件夹 |

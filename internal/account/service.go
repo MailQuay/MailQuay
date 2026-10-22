@@ -14,6 +14,7 @@ import (
 
 	"github.com/mailquay/mailquay/internal/crypto"
 	"github.com/mailquay/mailquay/internal/imapclient"
+	"github.com/mailquay/mailquay/internal/mailbox"
 	"github.com/mailquay/mailquay/internal/platform"
 	"github.com/mailquay/mailquay/internal/pop3client"
 	"github.com/mailquay/mailquay/internal/settings"
@@ -51,6 +52,11 @@ type Input struct {
 	SentCopyMode       string
 	POP3LeaveOnServer  bool
 	POP3DeleteOnServer bool
+	// AutoDetectSpecialFolders is nil when the caller did not send it.
+	AutoDetectSpecialFolders *bool
+	// SpecialFolders is nil when the caller did not send it; an empty map
+	// clears the manual choices.
+	SpecialFolders map[string]string
 }
 
 // Credentials holds decrypted account secrets.
@@ -78,6 +84,7 @@ type Service struct {
 	imports   *importStore
 	OnCreated func(ctx context.Context, accountID uuid.UUID)
 	OnDeleted func(ctx context.Context, accountID uuid.UUID)
+	OnUpdated func(ctx context.Context, accountID uuid.UUID)
 	OnScope   func(ctx context.Context, accountID uuid.UUID)
 }
 
@@ -115,32 +122,38 @@ func (s *Service) Create(ctx context.Context, in Input) (sqlcgen.Account, error)
 	if err != nil {
 		return sqlcgen.Account{}, err
 	}
+	autoDetect := true
+	if normalized.AutoDetectSpecialFolders != nil {
+		autoDetect = *normalized.AutoDetectSpecialFolders
+	}
 	id := uuid.MustParse(platform.NewID())
 	params := sqlcgen.CreateAccountParams{
-		ID:                  id,
-		Name:                normalized.Name,
-		Email:               normalized.Email,
-		Provider:            normalized.Provider,
-		Username:            normalized.Username,
-		AuthType:            normalized.AuthType,
-		OauthProvider:       nullable(normalized.OAuthProvider),
-		OauthScopes:         nil,
-		ReceiveProtocol:     normalized.ReceiveProtocol,
-		ImapAddr:            nullable(normalized.IMAPAddr),
-		ImapSecurity:        normalized.IMAPSecurity,
-		Pop3Addr:            nullable(normalized.POP3Addr),
-		Pop3Security:        normalized.POP3Security,
-		SmtpAddr:            nullable(normalized.SMTPAddr),
-		SmtpSecurity:        normalized.SMTPSecurity,
-		SmtpUsername:        nullable(normalized.SMTPUsername),
-		SmtpHeloHostname:    normalized.SMTPHeloHostname,
-		SyncEnabled:         normalized.SyncEnabled,
-		InitialSyncRange:    normalized.InitialSyncRange,
-		DownloadScope:       normalized.DownloadScope,
-		InitialSyncCutoffAt: cutoff(normalized.InitialSyncRange),
-		SentCopyMode:        normalized.SentCopyMode,
-		Pop3LeaveOnServer:   normalized.POP3LeaveOnServer,
-		Pop3DeleteOnServer:  normalized.POP3DeleteOnServer,
+		ID:                       id,
+		Name:                     normalized.Name,
+		Email:                    normalized.Email,
+		Provider:                 normalized.Provider,
+		Username:                 normalized.Username,
+		AuthType:                 normalized.AuthType,
+		OauthProvider:            nullable(normalized.OAuthProvider),
+		OauthScopes:              nil,
+		ReceiveProtocol:          normalized.ReceiveProtocol,
+		ImapAddr:                 nullable(normalized.IMAPAddr),
+		ImapSecurity:             normalized.IMAPSecurity,
+		Pop3Addr:                 nullable(normalized.POP3Addr),
+		Pop3Security:             normalized.POP3Security,
+		SmtpAddr:                 nullable(normalized.SMTPAddr),
+		SmtpSecurity:             normalized.SMTPSecurity,
+		SmtpUsername:             nullable(normalized.SMTPUsername),
+		SmtpHeloHostname:         normalized.SMTPHeloHostname,
+		SyncEnabled:              normalized.SyncEnabled,
+		InitialSyncRange:         normalized.InitialSyncRange,
+		DownloadScope:            normalized.DownloadScope,
+		InitialSyncCutoffAt:      cutoff(normalized.InitialSyncRange),
+		SentCopyMode:             normalized.SentCopyMode,
+		Pop3LeaveOnServer:        normalized.POP3LeaveOnServer,
+		Pop3DeleteOnServer:       normalized.POP3DeleteOnServer,
+		AutoDetectSpecialFolders: autoDetect,
+		SpecialFolders:           mailbox.EncodeSpecialFolders(normalized.SpecialFolders),
 	}
 	if in.AuthType == "password" {
 		enc, err := s.cipher.EncryptString(in.Password, passwordAAD(id))
@@ -193,31 +206,39 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in Input) (sqlcgen.A
 		return sqlcgen.Account{}, err
 	}
 	params := sqlcgen.UpdateAccountParams{
-		ID:                  id,
-		Name:                normalized.Name,
-		Email:               normalized.Email,
-		Username:            normalized.Username,
-		AuthType:            normalized.AuthType,
-		PasswordEnc:         existing.PasswordEnc,
-		OauthProvider:       nullable(normalized.OAuthProvider),
-		OauthScopes:         existing.OauthScopes,
-		OauthRefreshEnc:     existing.OauthRefreshEnc,
-		ReceiveProtocol:     normalized.ReceiveProtocol,
-		ImapAddr:            nullable(normalized.IMAPAddr),
-		ImapSecurity:        normalized.IMAPSecurity,
-		Pop3Addr:            nullable(normalized.POP3Addr),
-		Pop3Security:        normalized.POP3Security,
-		SmtpAddr:            nullable(normalized.SMTPAddr),
-		SmtpSecurity:        normalized.SMTPSecurity,
-		SmtpUsername:        nullable(normalized.SMTPUsername),
-		SmtpHeloHostname:    normalized.SMTPHeloHostname,
-		SyncEnabled:         normalized.SyncEnabled,
-		InitialSyncRange:    normalized.InitialSyncRange,
-		DownloadScope:       normalized.DownloadScope,
-		InitialSyncCutoffAt: existing.InitialSyncCutoffAt,
-		SentCopyMode:        normalized.SentCopyMode,
-		Pop3LeaveOnServer:   normalized.POP3LeaveOnServer,
-		Pop3DeleteOnServer:  normalized.POP3DeleteOnServer,
+		ID:                       id,
+		Name:                     normalized.Name,
+		Email:                    normalized.Email,
+		Username:                 normalized.Username,
+		AuthType:                 normalized.AuthType,
+		PasswordEnc:              existing.PasswordEnc,
+		OauthProvider:            nullable(normalized.OAuthProvider),
+		OauthScopes:              existing.OauthScopes,
+		OauthRefreshEnc:          existing.OauthRefreshEnc,
+		ReceiveProtocol:          normalized.ReceiveProtocol,
+		ImapAddr:                 nullable(normalized.IMAPAddr),
+		ImapSecurity:             normalized.IMAPSecurity,
+		Pop3Addr:                 nullable(normalized.POP3Addr),
+		Pop3Security:             normalized.POP3Security,
+		SmtpAddr:                 nullable(normalized.SMTPAddr),
+		SmtpSecurity:             normalized.SMTPSecurity,
+		SmtpUsername:             nullable(normalized.SMTPUsername),
+		SmtpHeloHostname:         normalized.SMTPHeloHostname,
+		SyncEnabled:              normalized.SyncEnabled,
+		InitialSyncRange:         normalized.InitialSyncRange,
+		DownloadScope:            normalized.DownloadScope,
+		InitialSyncCutoffAt:      existing.InitialSyncCutoffAt,
+		SentCopyMode:             normalized.SentCopyMode,
+		Pop3LeaveOnServer:        normalized.POP3LeaveOnServer,
+		Pop3DeleteOnServer:       normalized.POP3DeleteOnServer,
+		AutoDetectSpecialFolders: existing.AutoDetectSpecialFolders,
+		SpecialFolders:           existing.SpecialFolders,
+	}
+	if normalized.AutoDetectSpecialFolders != nil {
+		params.AutoDetectSpecialFolders = *normalized.AutoDetectSpecialFolders
+	}
+	if normalized.SpecialFolders != nil {
+		params.SpecialFolders = mailbox.EncodeSpecialFolders(normalized.SpecialFolders)
 	}
 	if normalized.InitialSyncRange != existing.InitialSyncRange || normalized.DownloadScope != existing.DownloadScope {
 		params.InitialSyncCutoffAt = cutoff(normalized.InitialSyncRange)
@@ -249,6 +270,9 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in Input) (sqlcgen.A
 	updated, err := s.store.UpdateAccount(ctx, params)
 	if err != nil {
 		return sqlcgen.Account{}, fmt.Errorf("update account: %w", err)
+	}
+	if s.OnUpdated != nil {
+		s.OnUpdated(ctx, id)
 	}
 	if normalized.InitialSyncRange != existing.InitialSyncRange || normalized.DownloadScope != existing.DownloadScope {
 		if s.OnScope != nil {
@@ -458,6 +482,13 @@ func (s *Service) normalize(in Input, creating bool) (Input, error) {
 	if !validScope(in.DownloadScope) {
 		return in, errors.New("downloadScope must be headers, full_no_attachments or full_with_attachments")
 	}
+	if in.SpecialFolders != nil {
+		normalized, err := normalizeSpecialFolders(in.SpecialFolders)
+		if err != nil {
+			return in, err
+		}
+		in.SpecialFolders = normalized
+	}
 	if in.SentCopyMode != "auto" && in.SentCopyMode != "append" && in.SentCopyMode != "none" {
 		return in, errors.New("sentCopyMode must be auto, append or none")
 	}
@@ -531,3 +562,25 @@ func firstNonEmpty(values ...string) string {
 }
 
 var _ = mail.ParseAddress
+
+// normalizeSpecialFolders trims manual folder paths, drops empty entries and
+// rejects unknown roles or two roles pointing at the same folder.
+func normalizeSpecialFolders(values map[string]string) (map[string]string, error) {
+	out := make(map[string]string, len(values))
+	seen := make(map[string]string, len(values))
+	for role, path := range values {
+		path = strings.TrimSpace(path)
+		if !mailbox.IsSpecialRole(role) {
+			return nil, fmt.Errorf("unknown special folder role %q", role)
+		}
+		if path == "" {
+			continue
+		}
+		if other, ok := seen[path]; ok {
+			return nil, fmt.Errorf("special folders %s and %s point to the same folder", other, role)
+		}
+		seen[path] = role
+		out[role] = path
+	}
+	return out, nil
+}

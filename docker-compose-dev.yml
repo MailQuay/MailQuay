@@ -53,7 +53,8 @@ services:
     environment:
       MAILQUAY_LISTEN_ADDR: :8080
       MAILQUAY_PUBLIC_URL: ${MAILQUAY_PUBLIC_URL:-http://localhost:${MAILQUAY_API_PORT:-8080}}
-      MAILQUAY_DATABASE_URL: postgres://mailquay:${POSTGRES_PASSWORD:-mailquay-dev}@postgres:5432/mailquay?sslmode=disable
+      # scripts/new-database.sh switches this name; the previous database is kept.
+      MAILQUAY_DATABASE_URL: postgres://mailquay:${POSTGRES_PASSWORD:-mailquay-dev}@postgres:5432/${MAILQUAY_DB_NAME:-mailquay}?sslmode=disable
       MAILQUAY_DATA_DIR: /data
       MAILQUAY_SECRET_KEY: ${MAILQUAY_SECRET_KEY:-ZGV2LW9ubHkta2V5LTAxMjM0NTY3ODlhYmNkZWZYWVo=}
       MAILQUAY_TRUSTED_PROXIES: ${MAILQUAY_TRUSTED_PROXIES:-172.16.0.0/12}

@@ -412,36 +412,38 @@ const (
 
 // Account defines model for Account.
 type Account struct {
-	AuthType            AccountAuthType         `json:"authType"`
-	CreatedAt           time.Time               `json:"createdAt"`
-	DownloadScope       AccountDownloadScope    `json:"downloadScope"`
-	Email               string                  `json:"email"`
-	HasOAuth            *bool                   `json:"hasOAuth,omitempty"`
-	HasPassword         *bool                   `json:"hasPassword,omitempty"`
-	HasSmtpPassword     *bool                   `json:"hasSmtpPassword,omitempty"`
-	Id                  openapi_types.UUID      `json:"id"`
-	Identities          *[]Identity             `json:"identities,omitempty"`
-	ImapAddr            *string                 `json:"imapAddr,omitempty"`
-	ImapSecurity        *AccountImapSecurity    `json:"imapSecurity,omitempty"`
-	InitialSyncCutoffAt *time.Time              `json:"initialSyncCutoffAt,omitempty"`
-	InitialSyncRange    AccountInitialSyncRange `json:"initialSyncRange"`
-	LastError           *string                 `json:"lastError,omitempty"`
-	Name                string                  `json:"name"`
-	OauthProvider       *string                 `json:"oauthProvider,omitempty"`
-	Pop3Addr            *string                 `json:"pop3Addr,omitempty"`
-	Pop3DeleteOnServer  *bool                   `json:"pop3DeleteOnServer,omitempty"`
-	Pop3LeaveOnServer   *bool                   `json:"pop3LeaveOnServer,omitempty"`
-	Pop3Security        *AccountPop3Security    `json:"pop3Security,omitempty"`
-	Provider            string                  `json:"provider"`
-	ReceiveProtocol     AccountReceiveProtocol  `json:"receiveProtocol"`
-	SentCopyMode        AccountSentCopyMode     `json:"sentCopyMode"`
-	SmtpAddr            *string                 `json:"smtpAddr,omitempty"`
-	SmtpHeloHostname    *string                 `json:"smtpHeloHostname,omitempty"`
-	SmtpSecurity        *AccountSmtpSecurity    `json:"smtpSecurity,omitempty"`
-	SmtpUsername        *string                 `json:"smtpUsername,omitempty"`
-	State               AccountState            `json:"state"`
-	SyncEnabled         bool                    `json:"syncEnabled"`
-	Username            string                  `json:"username"`
+	AuthType                 AccountAuthType         `json:"authType"`
+	AutoDetectSpecialFolders *bool                   `json:"autoDetectSpecialFolders,omitempty"`
+	CreatedAt                time.Time               `json:"createdAt"`
+	DownloadScope            AccountDownloadScope    `json:"downloadScope"`
+	Email                    string                  `json:"email"`
+	HasOAuth                 *bool                   `json:"hasOAuth,omitempty"`
+	HasPassword              *bool                   `json:"hasPassword,omitempty"`
+	HasSmtpPassword          *bool                   `json:"hasSmtpPassword,omitempty"`
+	Id                       openapi_types.UUID      `json:"id"`
+	Identities               *[]Identity             `json:"identities,omitempty"`
+	ImapAddr                 *string                 `json:"imapAddr,omitempty"`
+	ImapSecurity             *AccountImapSecurity    `json:"imapSecurity,omitempty"`
+	InitialSyncCutoffAt      *time.Time              `json:"initialSyncCutoffAt,omitempty"`
+	InitialSyncRange         AccountInitialSyncRange `json:"initialSyncRange"`
+	LastError                *string                 `json:"lastError,omitempty"`
+	Name                     string                  `json:"name"`
+	OauthProvider            *string                 `json:"oauthProvider,omitempty"`
+	Pop3Addr                 *string                 `json:"pop3Addr,omitempty"`
+	Pop3DeleteOnServer       *bool                   `json:"pop3DeleteOnServer,omitempty"`
+	Pop3LeaveOnServer        *bool                   `json:"pop3LeaveOnServer,omitempty"`
+	Pop3Security             *AccountPop3Security    `json:"pop3Security,omitempty"`
+	Provider                 string                  `json:"provider"`
+	ReceiveProtocol          AccountReceiveProtocol  `json:"receiveProtocol"`
+	SentCopyMode             AccountSentCopyMode     `json:"sentCopyMode"`
+	SmtpAddr                 *string                 `json:"smtpAddr,omitempty"`
+	SmtpHeloHostname         *string                 `json:"smtpHeloHostname,omitempty"`
+	SmtpSecurity             *AccountSmtpSecurity    `json:"smtpSecurity,omitempty"`
+	SmtpUsername             *string                 `json:"smtpUsername,omitempty"`
+	SpecialFolders           *SpecialFolders         `json:"specialFolders,omitempty"`
+	State                    AccountState            `json:"state"`
+	SyncEnabled              bool                    `json:"syncEnabled"`
+	Username                 string                  `json:"username"`
 }
 
 // AccountAuthType defines model for Account.AuthType.
@@ -473,30 +475,32 @@ type AccountState string
 
 // AccountInput defines model for AccountInput.
 type AccountInput struct {
-	AuthType           AccountInputAuthType          `json:"authType"`
-	DownloadScope      *AccountInputDownloadScope    `json:"downloadScope,omitempty"`
-	Email              openapi_types.Email           `json:"email"`
-	ImapAddr           *string                       `json:"imapAddr,omitempty"`
-	ImapSecurity       *AccountInputImapSecurity     `json:"imapSecurity,omitempty"`
-	InitialSyncRange   *AccountInputInitialSyncRange `json:"initialSyncRange,omitempty"`
-	Name               string                        `json:"name"`
-	OauthProvider      *AccountInputOauthProvider    `json:"oauthProvider,omitempty"`
-	OauthRefreshToken  *string                       `json:"oauthRefreshToken,omitempty"`
-	Password           *string                       `json:"password,omitempty"`
-	Pop3Addr           *string                       `json:"pop3Addr,omitempty"`
-	Pop3DeleteOnServer *bool                         `json:"pop3DeleteOnServer,omitempty"`
-	Pop3LeaveOnServer  *bool                         `json:"pop3LeaveOnServer,omitempty"`
-	Pop3Security       *AccountInputPop3Security     `json:"pop3Security,omitempty"`
-	Provider           *string                       `json:"provider,omitempty"`
-	ReceiveProtocol    AccountInputReceiveProtocol   `json:"receiveProtocol"`
-	SentCopyMode       *AccountInputSentCopyMode     `json:"sentCopyMode,omitempty"`
-	SmtpAddr           *string                       `json:"smtpAddr,omitempty"`
-	SmtpHeloHostname   *string                       `json:"smtpHeloHostname,omitempty"`
-	SmtpPassword       *string                       `json:"smtpPassword,omitempty"`
-	SmtpSecurity       *AccountInputSmtpSecurity     `json:"smtpSecurity,omitempty"`
-	SmtpUsername       *string                       `json:"smtpUsername,omitempty"`
-	SyncEnabled        *bool                         `json:"syncEnabled,omitempty"`
-	Username           string                        `json:"username"`
+	AuthType                 AccountInputAuthType          `json:"authType"`
+	AutoDetectSpecialFolders *bool                         `json:"autoDetectSpecialFolders,omitempty"`
+	DownloadScope            *AccountInputDownloadScope    `json:"downloadScope,omitempty"`
+	Email                    openapi_types.Email           `json:"email"`
+	ImapAddr                 *string                       `json:"imapAddr,omitempty"`
+	ImapSecurity             *AccountInputImapSecurity     `json:"imapSecurity,omitempty"`
+	InitialSyncRange         *AccountInputInitialSyncRange `json:"initialSyncRange,omitempty"`
+	Name                     string                        `json:"name"`
+	OauthProvider            *AccountInputOauthProvider    `json:"oauthProvider,omitempty"`
+	OauthRefreshToken        *string                       `json:"oauthRefreshToken,omitempty"`
+	Password                 *string                       `json:"password,omitempty"`
+	Pop3Addr                 *string                       `json:"pop3Addr,omitempty"`
+	Pop3DeleteOnServer       *bool                         `json:"pop3DeleteOnServer,omitempty"`
+	Pop3LeaveOnServer        *bool                         `json:"pop3LeaveOnServer,omitempty"`
+	Pop3Security             *AccountInputPop3Security     `json:"pop3Security,omitempty"`
+	Provider                 *string                       `json:"provider,omitempty"`
+	ReceiveProtocol          AccountInputReceiveProtocol   `json:"receiveProtocol"`
+	SentCopyMode             *AccountInputSentCopyMode     `json:"sentCopyMode,omitempty"`
+	SmtpAddr                 *string                       `json:"smtpAddr,omitempty"`
+	SmtpHeloHostname         *string                       `json:"smtpHeloHostname,omitempty"`
+	SmtpPassword             *string                       `json:"smtpPassword,omitempty"`
+	SmtpSecurity             *AccountInputSmtpSecurity     `json:"smtpSecurity,omitempty"`
+	SmtpUsername             *string                       `json:"smtpUsername,omitempty"`
+	SpecialFolders           *SpecialFolders               `json:"specialFolders,omitempty"`
+	SyncEnabled              *bool                         `json:"syncEnabled,omitempty"`
+	Username                 string                        `json:"username"`
 }
 
 // AccountInputAuthType defines model for AccountInput.AuthType.
@@ -1141,6 +1145,15 @@ type SetupRequest struct {
 	Password string `json:"password"`
 	Token    string `json:"token"`
 	Username string `json:"username"`
+}
+
+// SpecialFolders defines model for SpecialFolders.
+type SpecialFolders struct {
+	Archive *string `json:"archive,omitempty"`
+	Drafts  *string `json:"drafts,omitempty"`
+	Junk    *string `json:"junk,omitempty"`
+	Sent    *string `json:"sent,omitempty"`
+	Trash   *string `json:"trash,omitempty"`
 }
 
 // Task defines model for Task.

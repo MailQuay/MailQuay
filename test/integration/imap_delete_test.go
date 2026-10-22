@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net"
 	"os"
 	"testing"
@@ -209,4 +210,49 @@ func TestIMAPDeleteMovesToTrash(t *testing.T) {
 	if trashRows[0].Uid == nil {
 		t.Fatal("adopted message has no destination uid")
 	}
+
+	// An account without a Trash or Junk role must refuse to delete instead of
+	// falling back to a permanent removal.
+	second := []byte("From: Alice <alice@example.com>\r\nTo: bob@example.com\r\nSubject: No trash\r\nMessage-ID: <no-trash@example.com>\r\nDate: Mon, 20 Oct 2025 11:00:00 +0000\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nbody\r\n")
+	seed, err = imapclient.Dial(ctx, imapclient.Config{Address: addr, Security: "none", Username: "alice", Password: "secret", Timeout: 10 * time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := seed.Append(ctx, "INBOX", nil, time.Now(), second); err != nil {
+		t.Fatal(err)
+	}
+	_ = seed.Close()
+
+	autoDetect := false
+	untargeted, err := accounts.Create(ctx, account.Input{
+		Name: "Bob", Email: "bob@example.com", Username: "alice", AuthType: "password",
+		Password: "secret", ReceiveProtocol: "imap", IMAPAddr: addr, IMAPSecurity: "none",
+		SyncEnabled: true, InitialSyncRange: "all", DownloadScope: "full_no_attachments",
+		SentCopyMode: "none", AutoDetectSpecialFolders: &autoDetect,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := syncer.SyncNow(ctx, untargeted.ID); err != nil {
+		t.Fatal(err)
+	}
+	untargetedInbox, err := st.GetMailboxByRole(ctx, sqlcgen.GetMailboxByRoleParams{AccountID: untargeted.ID, Role: "inbox"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rows, err := st.ListMailboxMessages(ctx, sqlcgen.ListMailboxMessagesParams{MailboxID: untargetedInbox.ID, PageLimit: 10}); err == nil {
+		for _, row := range rows {
+			if row.Subject != "No trash" {
+				continue
+			}
+			if err := messages.Delete(ctx, row.ID); !errors.Is(err, message.ErrNoDeleteTarget) {
+				t.Fatalf("delete without trash error = %v, want ErrNoDeleteTarget", err)
+			}
+			if _, err := st.GetMessage(ctx, row.ID); err != nil {
+				t.Fatalf("message removed without a trash folder: %v", err)
+			}
+			return
+		}
+	}
+	t.Fatal("seeded message not found in the second account")
 }

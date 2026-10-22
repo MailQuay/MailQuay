@@ -145,6 +145,13 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	}
 
 	accounts.OnCreated = func(ctx context.Context, accountID uuid.UUID) { syncSvc.TriggerAccount(accountID) }
+	accounts.OnUpdated = func(ctx context.Context, accountID uuid.UUID) {
+		if err := mailboxes.ApplySpecialFolders(ctx, accountID); err != nil {
+			logger.Warn("apply special folders", "account", accountID, "error", err)
+		}
+		hub.Publish("account.updated", map[string]any{"accountId": accountID.String()})
+		hub.Publish("mailbox.updated", map[string]any{"accountId": accountID.String()})
+	}
 	accounts.OnScope = func(ctx context.Context, accountID uuid.UUID) { syncSvc.ReconcileScope(ctx, accountID) }
 	accounts.OnDeleted = func(ctx context.Context, accountID uuid.UUID) {
 		syncSvc.ForgetAccount(accountID)

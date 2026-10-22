@@ -3,6 +3,7 @@ package httpapi
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -226,6 +227,19 @@ func accountInput(body oapi.AccountInput) account.Input {
 	}
 	if body.SmtpSecurity != nil {
 		in.SMTPSecurity = string(*body.SmtpSecurity)
+	}
+	in.AutoDetectSpecialFolders = body.AutoDetectSpecialFolders
+	if body.SpecialFolders != nil {
+		in.SpecialFolders = map[string]string{}
+		for role, value := range map[string]*string{
+			"sent": body.SpecialFolders.Sent, "drafts": body.SpecialFolders.Drafts,
+			"trash": body.SpecialFolders.Trash, "junk": body.SpecialFolders.Junk,
+			"archive": body.SpecialFolders.Archive,
+		} {
+			if value != nil && strings.TrimSpace(*value) != "" {
+				in.SpecialFolders[role] = strings.TrimSpace(*value)
+			}
+		}
 	}
 	return in
 }

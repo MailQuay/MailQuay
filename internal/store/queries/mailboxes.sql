@@ -34,6 +34,9 @@ UPDATE mailboxes SET
     last_synced_at = COALESCE($6, last_synced_at), last_error = $7, updated_at = now()
 WHERE id = $1;
 
+-- name: SetMailboxRole :exec
+UPDATE mailboxes SET role = $2, updated_at = now() WHERE id = $1;
+
 -- name: UpdateMailboxCounts :exec
 UPDATE mailboxes SET total = $2, unread = $3, updated_at = now() WHERE id = $1;
 
