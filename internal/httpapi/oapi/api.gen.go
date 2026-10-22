@@ -1283,6 +1283,12 @@ type SearchMessagesParams struct {
 // SearchMessagesParamsMode defines parameters for SearchMessages.
 type SearchMessagesParamsMode string
 
+// DeleteTasksParams defines parameters for DeleteTasks.
+type DeleteTasksParams struct {
+	Type      []string            `form:"type" json:"type"`
+	AccountId *openapi_types.UUID `form:"accountId,omitempty" json:"accountId,omitempty"`
+}
+
 // CreateAccountJSONRequestBody defines body for CreateAccount for application/json ContentType.
 type CreateAccountJSONRequestBody = AccountInput
 
@@ -1526,8 +1532,17 @@ type ServerInterface interface {
 	// (POST /settings/concurrency/detect)
 	DetectConcurrency(w http.ResponseWriter, r *http.Request)
 
+	// (POST /sync)
+	SyncAll(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /tasks)
+	DeleteTasks(w http.ResponseWriter, r *http.Request, params DeleteTasksParams)
+
 	// (GET /tasks)
 	ListTasks(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /tasks/{id})
+	DeleteTask(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 
 	// (POST /tasks/{id}/dismiss)
 	DismissTask(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
@@ -1843,8 +1858,23 @@ func (_ Unimplemented) DetectConcurrency(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// (POST /sync)
+func (_ Unimplemented) SyncAll(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (DELETE /tasks)
+func (_ Unimplemented) DeleteTasks(w http.ResponseWriter, r *http.Request, params DeleteTasksParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // (GET /tasks)
 func (_ Unimplemented) ListTasks(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (DELETE /tasks/{id})
+func (_ Unimplemented) DeleteTask(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3422,11 +3452,92 @@ func (siw *ServerInterfaceWrapper) DetectConcurrency(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// SyncAll operation middleware
+func (siw *ServerInterfaceWrapper) SyncAll(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SyncAll(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteTasks operation middleware
+func (siw *ServerInterfaceWrapper) DeleteTasks(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteTasksParams
+
+	// ------------- Required query parameter "type" -------------
+
+	if paramValue := r.URL.Query().Get("type"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "type"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "type", r.URL.Query(), &params.Type)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "type", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "accountId" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "accountId", r.URL.Query(), &params.AccountId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "accountId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteTasks(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListTasks operation middleware
 func (siw *ServerInterfaceWrapper) ListTasks(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListTasks(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteTask operation middleware
+func (siw *ServerInterfaceWrapper) DeleteTask(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteTask(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3805,7 +3916,16 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/settings/concurrency/detect", wrapper.DetectConcurrency)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/sync", wrapper.SyncAll)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/tasks", wrapper.DeleteTasks)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/tasks", wrapper.ListTasks)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/tasks/{id}", wrapper.DeleteTask)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/tasks/{id}/dismiss", wrapper.DismissTask)

@@ -180,6 +180,9 @@ func (s *Service) scheduler(ctx context.Context) {
 	defer s.wg.Done()
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
+	purgeTicker := time.NewTicker(time.Hour)
+	defer purgeTicker.Stop()
+	s.purgeExpiredTasks(ctx)
 	s.triggerDue(ctx, true)
 	for {
 		select {
@@ -189,7 +192,16 @@ func (s *Service) scheduler(ctx context.Context) {
 			s.startAccountWorker(ctx, id)
 		case <-ticker.C:
 			s.triggerDue(ctx, false)
+		case <-purgeTicker.C:
+			s.purgeExpiredTasks(ctx)
 		}
+	}
+}
+
+// purgeExpiredTasks drops task records older than the 24 hour log window.
+func (s *Service) purgeExpiredTasks(ctx context.Context) {
+	if err := s.store.PurgeExpiredTasks(ctx); err != nil {
+		s.logger.Warn("purge expired tasks", "error", err)
 	}
 }
 

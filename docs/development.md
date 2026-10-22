@@ -428,6 +428,7 @@ docker compose -f docker-compose-dev.yml up -d --build
 | 草稿在其他客户端看不到 | 预期行为; 草稿只存在 MailQuay, 不镜像服务器 Drafts |
 | 全部视图出现重复邮件 | 检查去重键是否使用账号加 Message-ID, 以及是否错误同步了服务商 All Mail |
 | POP3 新邮件延迟 | 轮询模式, 检查设置页的 POP3 轮询间隔; POP3 没有 IDLE |
+| 顶栏刷新没有新邮件 | 确认请求命中 `POST /sync` 或 `POST /mailboxes/{id}/sync`, 服务端同步队列是否已启动, SSE 是否收到 `task.updated` |
 | 任务中心为空 | 检查 `tasks` 是否有活动记录, SSE 是否收到 `task.updated`, 初始同步是否已启动 |
 | 任务中心进度不动 | 查看任务 `done/total` 是否更新, worker 是否卡在 IMAP/POP3 连接, 是否有索引锁冲突 |
 | 任务一直停在运行中 | 打开任务面板看 `error`; 单个文件夹失败会把任务标记为 `failed`, 下次同步复用同一条记录 |

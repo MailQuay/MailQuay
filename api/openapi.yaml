@@ -283,6 +283,13 @@ paths:
         '202': { description: Sync requested. }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /sync:
+    post:
+      operationId: syncAll
+      tags: [accounts]
+      responses:
+        '202': { description: Sync requested for every account. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
   /accounts/{id}/identities:
     parameters:
       - $ref: '#/components/parameters/AccountID'
@@ -964,6 +971,38 @@ paths:
                     items: { $ref: '#/components/schemas/Task' }
                 required: [tasks]
         '401': { $ref: '#/components/responses/Unauthorized' }
+    delete:
+      operationId: deleteTasks
+      tags: [tasks]
+      parameters:
+        - name: type
+          in: query
+          required: true
+          style: form
+          explode: true
+          schema:
+            type: array
+            items: { type: string }
+        - name: accountId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Task records deleted. }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /tasks/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      operationId: deleteTask
+      tags: [tasks]
+      responses:
+        '204': { description: Task record deleted. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /tasks/{id}/retry:
     parameters:
       - name: id

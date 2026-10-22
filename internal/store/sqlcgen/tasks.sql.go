@@ -39,6 +39,32 @@ func (q *Queries) CompleteTask(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const deleteTask = `-- name: DeleteTask :exec
+DELETE FROM tasks WHERE id = $1
+`
+
+func (q *Queries) DeleteTask(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteTask, id)
+	return err
+}
+
+const deleteTasksByType = `-- name: DeleteTasksByType :exec
+DELETE FROM tasks
+WHERE type = ANY($1::text[])
+  AND account_id IS NOT DISTINCT FROM $2
+  AND status IN ('completed', 'cancelled')
+`
+
+type DeleteTasksByTypeParams struct {
+	Types     []string   `json:"types"`
+	AccountID *uuid.UUID `json:"account_id"`
+}
+
+func (q *Queries) DeleteTasksByType(ctx context.Context, arg DeleteTasksByTypeParams) error {
+	_, err := q.db.Exec(ctx, deleteTasksByType, arg.Types, arg.AccountID)
+	return err
+}
+
 const dismissTask = `-- name: DismissTask :exec
 UPDATE tasks SET dismissed_at = now(), updated_at = now() WHERE id = $1
 `
@@ -120,14 +146,23 @@ func (q *Queries) GetTask(ctx context.Context, id uuid.UUID) (Task, error) {
 }
 
 const listTasks = `-- name: ListTasks :many
-SELECT id, type, account_id, status, done, total, unit, message, error, started_at, updated_at, completed_at, dismissed_at, created_at FROM tasks
-WHERE dismissed_at IS NULL AND (
-    status IN ('pending', 'running', 'failed')
-    OR (status IN ('completed', 'cancelled') AND completed_at > now() - interval '10 seconds')
-)
+SELECT id, type, account_id, status, done, total, unit, message, error, started_at, updated_at, completed_at, dismissed_at, created_at FROM (
+    SELECT id, type, account_id, status, done, total, unit, message, error, started_at, updated_at, completed_at, dismissed_at, created_at FROM tasks
+    WHERE dismissed_at IS NULL AND status IN ('pending', 'running', 'failed')
+    UNION ALL
+    SELECT id, type, account_id, status, done, total, unit, message, error, started_at, updated_at, completed_at, dismissed_at, created_at FROM (
+        SELECT id, type, account_id, status, done, total, unit, message, error, started_at, updated_at, completed_at, dismissed_at, created_at FROM tasks
+        WHERE dismissed_at IS NULL AND status IN ('completed', 'cancelled')
+          AND completed_at > now() - interval '24 hours'
+        ORDER BY updated_at DESC
+        LIMIT 20
+    ) AS recent
+) AS listed
 ORDER BY CASE status WHEN 'failed' THEN 0 WHEN 'running' THEN 1 WHEN 'pending' THEN 2 ELSE 3 END, updated_at DESC
 `
 
+// Active work is always listed; finished work stays visible for a day so the
+// task center can show recent completions, capped to the newest 20 rows.
 func (q *Queries) ListTasks(ctx context.Context) ([]Task, error) {
 	rows, err := q.db.Query(ctx, listTasks)
 	if err != nil {
@@ -161,6 +196,18 @@ func (q *Queries) ListTasks(ctx context.Context) ([]Task, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const purgeExpiredTasks = `-- name: PurgeExpiredTasks :exec
+DELETE FROM tasks
+WHERE (status IN ('completed', 'cancelled') AND completed_at < now() - interval '24 hours')
+   OR (status = 'failed' AND updated_at < now() - interval '24 hours')
+`
+
+// Task records act as logs: each task is kept for 24 hours after it ends.
+func (q *Queries) PurgeExpiredTasks(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, purgeExpiredTasks)
+	return err
 }
 
 const restartFailedTask = `-- name: RestartFailedTask :one

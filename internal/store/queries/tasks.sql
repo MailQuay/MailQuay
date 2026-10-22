@@ -42,12 +42,36 @@ UPDATE tasks SET status = 'cancelled', completed_at = now(), updated_at = now() 
 UPDATE tasks SET dismissed_at = now(), updated_at = now() WHERE id = $1;
 
 -- name: ListTasks :many
-SELECT * FROM tasks
-WHERE dismissed_at IS NULL AND (
-    status IN ('pending', 'running', 'failed')
-    OR (status IN ('completed', 'cancelled') AND completed_at > now() - interval '10 seconds')
-)
+-- Active work is always listed; finished work stays visible for a day so the
+-- task center can show recent completions, capped to the newest 20 rows.
+SELECT * FROM (
+    SELECT * FROM tasks
+    WHERE dismissed_at IS NULL AND status IN ('pending', 'running', 'failed')
+    UNION ALL
+    SELECT * FROM (
+        SELECT * FROM tasks
+        WHERE dismissed_at IS NULL AND status IN ('completed', 'cancelled')
+          AND completed_at > now() - interval '24 hours'
+        ORDER BY updated_at DESC
+        LIMIT 20
+    ) AS recent
+) AS listed
 ORDER BY CASE status WHEN 'failed' THEN 0 WHEN 'running' THEN 1 WHEN 'pending' THEN 2 ELSE 3 END, updated_at DESC;
+
+-- name: PurgeExpiredTasks :exec
+-- Task records act as logs: each task is kept for 24 hours after it ends.
+DELETE FROM tasks
+WHERE (status IN ('completed', 'cancelled') AND completed_at < now() - interval '24 hours')
+   OR (status = 'failed' AND updated_at < now() - interval '24 hours');
+
+-- name: DeleteTasksByType :exec
+DELETE FROM tasks
+WHERE type = ANY(sqlc.arg(types)::text[])
+  AND account_id IS NOT DISTINCT FROM sqlc.narg(account_id)
+  AND status IN ('completed', 'cancelled');
+
+-- name: DeleteTask :exec
+DELETE FROM tasks WHERE id = $1;
 
 -- name: GetTask :one
 SELECT * FROM tasks WHERE id = $1;

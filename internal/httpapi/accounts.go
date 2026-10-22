@@ -182,6 +182,21 @@ func mapDiscoveryEndpoint(endpoint *discovery.Endpoint) *oapi.DiscoveryEndpoint 
 	}
 }
 
+func (s *Server) SyncAll(w http.ResponseWriter, r *http.Request) {
+	accounts, err := s.store.ListAccounts(r.Context())
+	if err != nil {
+		s.internal(w, r, err)
+		return
+	}
+	for _, acct := range accounts {
+		if !acct.SyncEnabled {
+			continue
+		}
+		s.sync.TriggerAccount(acct.ID)
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
 func (s *Server) SyncAccount(w http.ResponseWriter, r *http.Request, id oapi.AccountID) {
 	accountID, ok := toUUID(id)
 	if !ok {
