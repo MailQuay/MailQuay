@@ -260,6 +260,13 @@ POP3 没有文件夹, 服务端标志和 IDLE. 兼容层不模拟不存在的语
 - 中国移动邮件网关在 ClientHello 未携带静态 RSA 套件时直接回 `handshake_failure`, 即使客户端同时提供了 ECDHE 套件; 该行为只出现在 IMAP 入口, 同一域名的 POP3 和 SMTP 入口不受影响.
 - 套件顺序保持 ECDHE 在前, 服务端支持前向保密时不会退化为静态 RSA.
 
+#### IMAP 客户端标识
+
+- 认证完成后, 若 `CAPABILITY` 含 `ID`, 客户端发送 `ID ("name" "MailQuay" "version" "<构建版本>")`, 与 Thunderbird 的标识方式一致.
+- 网易 163/126/188/yeah 在 `LOGIN` 成功后仍要求这条标识; 缺失时所有文件夹的 `SELECT` 都返回 `NO ... Unsafe Login`, 与文件夹本身无关.
+- 只对宣告 `ID` 能力的服务器发送; 命令被拒绝时忽略错误, 连接继续使用, 其他服务商不受影响.
+- 版本由 `cmd/mailquay` 启动时通过 `imapclient.SetVersion` 注入, 未注入时为 `dev`.
+
 ### 4.3 发信
 
 ```mermaid

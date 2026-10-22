@@ -180,6 +180,21 @@ func requiresStaticRSACiphers(host string) bool {
 	return false
 }
 
+// idName identifies MailQuay in the RFC 2971 ID command.
+const idName = "MailQuay"
+
+// clientVersion is the version reported in the ID command. cmd/mailquay sets it
+// from the build version before any connection is opened.
+var clientVersion = "dev"
+
+// SetVersion sets the version MailQuay reports to IMAP servers that support
+// the ID extension. An empty version is ignored.
+func SetVersion(v string) {
+	if v != "" {
+		clientVersion = v
+	}
+}
+
 // Dial connects, negotiates transport security, authenticates and returns a
 // ready client.
 func Dial(ctx context.Context, cfg Config) (*Client, error) {
@@ -269,6 +284,19 @@ func Dial(ctx context.Context, cfg Config) (*Client, error) {
 		c.caps = c.c.Caps()
 		return nil
 	})
+
+	// Identify the client like Thunderbird does. NetEase (163.com, 126.com,
+	// 188.com, yeah.net) rejects SELECT with "Unsafe Login" until the client
+	// sends an ID command after authentication. The ID extension is optional,
+	// so only servers that advertise it are answered; a rejected ID is not
+	// fatal and leaves the connection usable.
+	if c.hasCap(imap.CapID) {
+		_ = c.do(ctx, func() error {
+			_, err := c.c.ID(&imap.IDData{Name: idName, Version: clientVersion}).Wait()
+			return err
+		})
+	}
+
 	select {
 	case <-c.c.Closed():
 		c.disconnect()

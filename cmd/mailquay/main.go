@@ -18,6 +18,7 @@ import (
 
 	"github.com/mailquay/mailquay/internal/app"
 	"github.com/mailquay/mailquay/internal/config"
+	"github.com/mailquay/mailquay/internal/imapclient"
 	"github.com/mailquay/mailquay/internal/platform"
 	"github.com/mailquay/mailquay/internal/store"
 )
@@ -71,6 +72,7 @@ func runServe() error {
 	if err != nil {
 		return err
 	}
+	imapclient.SetVersion(version)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	application, err := app.New(ctx, cfg)
