@@ -459,7 +459,7 @@ paths:
       operationId: deleteMessage
       tags: [messages]
       responses:
-        '202': { description: Message moved to Junk or queued for deletion. }
+        '202': { description: Message moved to Trash or queued for deletion. }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
   /messages/{id}/body:

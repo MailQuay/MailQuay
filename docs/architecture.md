@@ -190,6 +190,7 @@ stateDiagram-v2
 - `UIDVALIDITY` 变化表示服务端重建了 UID 空间, 清空该文件夹的本地消息并重新同步, 同时丢弃该文件夹的 `pending_ops`, 避免用旧 UID 执行写操作.
 - 非 INBOX 文件夹不保持 IDLE, 每 60 秒通过 `STATUS` 检查 `MESSAGES`, `UNSEEN`, `UIDNEXT`, 有变化再同步.
 - 每 15 分钟做一次标志对账, 修复本地乐观更新与服务端的偏差.
+- 已读状态变更, 移动和删除在本地提交后立即重算受影响文件夹的 `total` 和 `unread`, 并推送 `mailbox.updated`; 侧边栏计数不等待下一轮同步.
 - 一轮同步中途连接断开时立即中止本轮: `mailsession` 丢弃死连接, 用新连接重跑整轮. 首次尝试不写入文件夹错误, 重试仍失败才记录具体文件夹; 未尝试的文件夹保持原状态.
 
 IDLE 连接:
@@ -452,10 +453,10 @@ sequenceDiagram
 
 删除:
 
-- 默认 `delete_mode=provider_auto`: 删除动作把邮件移动到 Junk, 由邮件服务按自己的策略自动清理.
-- 可选 `delete_mode=local_queue`: 邮件仍移动到 Junk, 同时写入 `delete_queue`, `delete_after = now + delete_queue_days`.
+- 默认 `delete_mode=provider_auto`: 删除动作把邮件移动到 Trash, 由邮件服务按自己的策略自动清理; 服务商没有 Trash 文件夹时回退到 Junk.
+- 可选 `delete_mode=local_queue`: 邮件仍移动到 Trash, 同时写入 `delete_queue`, `delete_after = now + delete_queue_days`.
 - `delete_queue_days` 默认 30 天; 到期 worker 永久删除远端邮件和本地记录, 再删除搜索文档.
-- 服务端提前清理了 Junk 邮件时, worker 对账后把队列标记完成.
+- 服务端提前清理了 Trash 邮件时, worker 对账后把队列标记完成.
 - 删除失败进入任务环并重试; 用户可以在设置中切换删除模式.
 - 已本地归档的邮件不受远端删除, 删除队列和账号删除影响.
 

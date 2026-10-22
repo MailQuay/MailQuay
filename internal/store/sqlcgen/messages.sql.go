@@ -572,6 +572,35 @@ func (q *Queries) ListAllMessages(ctx context.Context) ([]Message, error) {
 	return items, nil
 }
 
+const listMailboxIDsForDedupe = `-- name: ListMailboxIDsForDedupe :many
+SELECT DISTINCT mailbox_id FROM messages WHERE account_id = $1 AND dedupe_key = $2
+`
+
+type ListMailboxIDsForDedupeParams struct {
+	AccountID uuid.UUID `json:"account_id"`
+	DedupeKey string    `json:"dedupe_key"`
+}
+
+func (q *Queries) ListMailboxIDsForDedupe(ctx context.Context, arg ListMailboxIDsForDedupeParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listMailboxIDsForDedupe, arg.AccountID, arg.DedupeKey)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var mailbox_id uuid.UUID
+		if err := rows.Scan(&mailbox_id); err != nil {
+			return nil, err
+		}
+		items = append(items, mailbox_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMailboxMessages = `-- name: ListMailboxMessages :many
 SELECT id, account_id, mailbox_id, uid, pop3_uidl, modseq, message_id_header, provider_msg_id, dedupe_key, in_reply_to, references_list, thread_id, subject, from_addr, to_addrs, cc_addrs, bcc_addrs, sent_at, received_at, size, flags, keywords, local_flag, preserved_at, snippet, has_attachments, raw_sha256, body_state, attachments_state, created_at, updated_at FROM messages
 WHERE mailbox_id = $1

@@ -249,3 +249,6 @@ WHERE mailbox_id = sqlc.arg(mailbox_id) AND NOT ('\Seen' = ANY(flags))
   AND (sqlc.narg(cursor_received)::timestamptz IS NULL OR (received_at, id) < (sqlc.narg(cursor_received)::timestamptz, sqlc.narg(cursor_id)::uuid))
 ORDER BY received_at DESC, id DESC
 LIMIT sqlc.arg(page_limit);
+
+-- name: ListMailboxIDsForDedupe :many
+SELECT DISTINCT mailbox_id FROM messages WHERE account_id = $1 AND dedupe_key = $2;

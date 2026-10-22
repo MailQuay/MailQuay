@@ -234,6 +234,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, unread, marked *bool
 		}); err != nil {
 			return sqlcgen.Message{}, fmt.Errorf("update flags: %w", err)
 		}
+		s.refreshDedupeMailboxCounts(ctx, msg)
 		if acct.ReceiveProtocol == "imap" && mb.Role != "sent" && !mb.LocalOnly {
 			payload, _ := json.Marshal(map[string]any{"add": !*unread, "flags": []string{"\\Seen"}})
 			_, err := s.store.EnqueuePendingOp(ctx, sqlcgen.EnqueuePendingOpParams{
@@ -300,12 +301,57 @@ func (s *Service) Move(ctx context.Context, id, mailboxID uuid.UUID) error {
 			s.logger.Warn("queue move op", "message", id, "error", err)
 		}
 	}
+	srcID := msg.MailboxID
 	msg.MailboxID = mailboxID
+	s.refreshMailboxCounts(ctx, srcID)
+	if mailboxID != srcID {
+		s.refreshMailboxCounts(ctx, mailboxID)
+	}
 	s.publishMessage(msg)
 	return nil
 }
 
-// Delete moves a message to Junk or permanently removes it when already there.
+// refreshDedupeMailboxCounts refreshes every mailbox holding a copy of msg.
+func (s *Service) refreshDedupeMailboxCounts(ctx context.Context, msg sqlcgen.Message) {
+	ids, err := s.store.ListMailboxIDsForDedupe(ctx, sqlcgen.ListMailboxIDsForDedupeParams{
+		AccountID: msg.AccountID, DedupeKey: msg.DedupeKey,
+	})
+	if err != nil {
+		s.logger.Warn("list message mailboxes", "message", msg.ID, "error", err)
+		ids = []uuid.UUID{msg.MailboxID}
+	}
+	for _, mailboxID := range ids {
+		s.refreshMailboxCounts(ctx, mailboxID)
+	}
+}
+
+// refreshMailboxCounts recomputes stored total and unread counters and pushes
+// them to the sidebar. Read changes, moves and deletes alter the counts
+// immediately, but the mailbox sync pass that normally recomputes them can be
+// minutes away.
+func (s *Service) refreshMailboxCounts(ctx context.Context, mailboxID uuid.UUID) {
+	total, err := s.store.CountMessagesInMailbox(ctx, mailboxID)
+	if err != nil {
+		s.logger.Warn("count mailbox messages", "mailbox", mailboxID, "error", err)
+		return
+	}
+	unread, err := s.store.CountUnreadInMailbox(ctx, mailboxID)
+	if err != nil {
+		s.logger.Warn("count mailbox unread", "mailbox", mailboxID, "error", err)
+		return
+	}
+	if err := s.store.UpdateMailboxCounts(ctx, sqlcgen.UpdateMailboxCountsParams{
+		ID: mailboxID, Total: int32(total), Unread: int32(unread),
+	}); err != nil {
+		s.logger.Warn("update mailbox counts", "mailbox", mailboxID, "error", err)
+		return
+	}
+	s.hub.Publish("mailbox.updated", map[string]any{
+		"mailboxId": mailboxID.String(), "total": total, "unread": unread,
+	})
+}
+
+// Delete moves a message to Trash or permanently removes it when already there.
 func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 	msg, err := s.Get(ctx, id)
 	if err != nil {
@@ -345,15 +391,20 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 		}
 		return s.PermanentlyDelete(ctx, msg, acct)
 	}
-	junk, junkErr := s.store.GetMailboxByRole(ctx, sqlcgen.GetMailboxByRoleParams{AccountID: msg.AccountID, Role: "junk"})
-	if junkErr == nil && mb.ID != junk.ID && mb.Role != "trash" {
-		if err := s.Move(ctx, id, junk.ID); err != nil {
+	target, targetErr := s.store.GetMailboxByRole(ctx, sqlcgen.GetMailboxByRoleParams{AccountID: msg.AccountID, Role: "trash"})
+	if targetErr != nil {
+		// Servers without a Trash folder usually still expose Junk; keeping the
+		// message there leaves it recoverable until the provider cleans it up.
+		target, targetErr = s.store.GetMailboxByRole(ctx, sqlcgen.GetMailboxByRoleParams{AccountID: msg.AccountID, Role: "junk"})
+	}
+	if targetErr == nil && mb.ID != target.ID {
+		if err := s.Move(ctx, id, target.ID); err != nil {
 			return err
 		}
 		if deleteMode == "local_queue" {
 			_, err := s.store.EnqueueDelete(ctx, sqlcgen.EnqueueDeleteParams{
 				ID: uuid.MustParse(platform.NewID()), MessageID: msg.ID, AccountID: msg.AccountID,
-				MailboxID: junk.ID, Uid: msg.Uid, DeleteAfter: time.Now().UTC().Add(time.Duration(deleteDays) * 24 * time.Hour),
+				MailboxID: target.ID, Uid: msg.Uid, DeleteAfter: time.Now().UTC().Add(time.Duration(deleteDays) * 24 * time.Hour),
 			})
 			if err != nil {
 				return fmt.Errorf("enqueue delete: %w", err)
@@ -387,7 +438,11 @@ func (s *Service) PermanentlyDelete(ctx context.Context, msg sqlcgen.Message, ac
 			s.logger.Warn("queue pop3 delete op", "message", msg.ID, "error", err)
 		}
 	}
-	return s.DeleteLocal(ctx, msg)
+	if err := s.DeleteLocal(ctx, msg); err != nil {
+		return err
+	}
+	s.refreshMailboxCounts(ctx, msg.MailboxID)
+	return nil
 }
 
 // DeleteLocal removes the row and queues a search deletion.

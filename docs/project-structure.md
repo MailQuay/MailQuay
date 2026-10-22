@@ -585,7 +585,7 @@ frontend/
 | `GET` | `/messages/{id}/attachments/{attachmentId}` | 附件下载 |
 | `PATCH` | `/messages/{id}` | 更新已读, 本地标记等状态; 归档使用独立动作 |
 | `POST` | `/messages/{id}/move` | 移动到目标文件夹 |
-| `DELETE` | `/messages/{id}` | 按删除设置移入 Junk 或写入删除队列 |
+| `DELETE` | `/messages/{id}` | 按删除设置移入 Trash 或写入删除队列 |
 | `POST` | `/messages/{id}/archive` | 复制完整邮件到本地归档 |
 | `POST` | `/messages/batch` | 批量已读, 标记, 归档, 移动, 删除 |
 | `GET` | `/archive` | 本地归档列表 |
@@ -642,7 +642,7 @@ data: <JSON>
 | `message.new` | `{"accountId":"...","mailboxId":"...","messageId":"...","unread":true}` |
 | `message.updated` | `{"messageId":"...","mailboxId":"...","fields":["flags","bodyState"]}` |
 | `message.removed` | `{"messageId":"...","mailboxId":"..."}` |
-| `mailbox.updated` | `{"mailboxId":"...","unread":12,"total":340,"syncState":"idle"}` |
+| `mailbox.updated` | `{"mailboxId":"...","unread":12,"total":340}`; 同步状态变化时附带 `"syncState"` |
 | `account.updated` | `{"accountId":"...","state":"connected","error":null}` |
 | `outbox.updated` | `{"outboxId":"...","status":"sent","error":null}` |
 | `task.updated` | `{"taskId":"...","type":"body_fetch","accountId":"...","status":"running","done":120,"total":500,"unit":"messages"}` |
