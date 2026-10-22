@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -283,9 +284,7 @@ func (s *Service) syncAccount(ctx context.Context, accountID uuid.UUID) error {
 	var syncErr error
 	switch acct.ReceiveProtocol {
 	case "imap":
-		syncErr = s.sessions.Do(ctx, acct.ID, false, s.imapDialer(acct, creds), func(ctx context.Context, client *imapclient.Client) error {
-			return s.syncIMAP(ctx, client, acct)
-		})
+		syncErr = s.syncIMAPAccount(ctx, acct, creds)
 	case "pop3":
 		syncErr = s.syncPOP3(ctx, acct, creds)
 	default:
@@ -299,6 +298,25 @@ func (s *Service) syncAccount(ctx context.Context, accountID uuid.UUID) error {
 	}
 	_ = s.store.SetAccountState(ctx, sqlcgen.SetAccountStateParams{ID: acct.ID, SyncState: "connected", LastError: ""})
 	return nil
+}
+
+// syncIMAPAccount runs one IMAP sync pass, redialing once when the provider
+// drops the connection mid-pass. The pooled session discards the dead
+// connection when the attempt returns an error, so the second attempt starts
+// on a fresh connection.
+func (s *Service) syncIMAPAccount(ctx context.Context, acct sqlcgen.Account, creds account.Credentials) error {
+	dial := s.imapDialer(acct, creds)
+	attempt := func(retryable bool) error {
+		return s.sessions.Do(ctx, acct.ID, false, dial, func(ctx context.Context, client *imapclient.Client) error {
+			return s.syncIMAP(ctx, client, acct, retryable)
+		})
+	}
+	err := attempt(true)
+	if err == nil || !errors.Is(err, errConnectionLost) || ctx.Err() != nil {
+		return err
+	}
+	s.logger.Info("imap connection lost during sync; retrying", "account", acct.ID)
+	return attempt(false)
 }
 
 // imapDialer returns the dialer used by the account session. Background work

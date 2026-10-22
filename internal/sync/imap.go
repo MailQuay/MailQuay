@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -27,6 +28,12 @@ const maxEnvelopeBatch = 200
 // paced even though the connection is reused.
 const envelopeBatchInterval = 200 * time.Millisecond
 
+// errConnectionLost marks a pass that stopped because the shared IMAP
+// connection died, not because a mailbox is broken. syncAccount retries once
+// with a fresh connection; mailbox-level state is only recorded on the last
+// attempt.
+var errConnectionLost = errors.New("imap connection lost")
+
 // envelopeBatchSize returns the configured per-FETCH envelope count.
 func (s *Service) envelopeBatchSize() int {
 	size := s.settings.Current().EnvelopeBatchSize
@@ -50,9 +57,19 @@ func (s *Service) imapConfig(acct sqlcgen.Account, creds account.Credentials) im
 	}
 }
 
-func (s *Service) syncIMAP(ctx context.Context, client *imapclient.Client, acct sqlcgen.Account) error {
+// syncIMAP lists folders and syncs every mailbox on one connection.
+//
+// A dead connection aborts the pass: retryable is true while another attempt is
+// still allowed, so the mailbox that hit the failure is not marked failed only
+// to have the retry clear it. Mailboxes that were never attempted keep their
+// state as well. The returned error wraps errConnectionLost so the caller can
+// redial and rerun the pass.
+func (s *Service) syncIMAP(ctx context.Context, client *imapclient.Client, acct sqlcgen.Account, retryable bool) error {
 	folders, err := client.List(ctx)
 	if err != nil {
+		if client.Closed() {
+			return fmt.Errorf("%w: list imap folders: %v", errConnectionLost, err)
+		}
 		return fmt.Errorf("list imap folders: %w", err)
 	}
 	if _, err := s.mailboxes.UpsertFromFolders(ctx, acct.ID, folders); err != nil {
@@ -74,12 +91,13 @@ func (s *Service) syncIMAP(ctx context.Context, client *imapclient.Client, acct 
 			continue
 		}
 		if err := s.syncIMAPMailbox(ctx, client, acct, mb); err != nil {
-			s.logger.Warn("sync mailbox", "account", acct.ID, "mailbox", mb.Path, "error", err)
-			_ = s.store.UpdateMailboxState(ctx, sqlcgen.UpdateMailboxStateParams{
-				ID: mb.ID, Uidvalidity: mb.Uidvalidity, Uidnext: mb.Uidnext, Highestmodseq: mb.Highestmodseq,
-				SyncState: "error", LastSyncedAt: mb.LastSyncedAt, LastError: err.Error(),
-			})
-			s.hub.Publish("mailbox.updated", map[string]any{"mailboxId": mb.ID.String(), "syncState": "error"})
+			if client.Closed() {
+				if !retryable {
+					s.markMailboxError(ctx, acct, mb, err)
+				}
+				return fmt.Errorf("%w: %v", errConnectionLost, err)
+			}
+			s.markMailboxError(ctx, acct, mb, err)
 		}
 	}
 	if snap.Values.DraftSyncMode != "local" {
@@ -90,6 +108,16 @@ func (s *Service) syncIMAP(ctx context.Context, client *imapclient.Client, acct 
 		}
 	}
 	return nil
+}
+
+// markMailboxError records a mailbox-level failure and notifies the UI.
+func (s *Service) markMailboxError(ctx context.Context, acct sqlcgen.Account, mb sqlcgen.Mailbox, cause error) {
+	s.logger.Warn("sync mailbox", "account", acct.ID, "mailbox", mb.Path, "error", cause)
+	_ = s.store.UpdateMailboxState(ctx, sqlcgen.UpdateMailboxStateParams{
+		ID: mb.ID, Uidvalidity: mb.Uidvalidity, Uidnext: mb.Uidnext, Highestmodseq: mb.Highestmodseq,
+		SyncState: "error", LastSyncedAt: mb.LastSyncedAt, LastError: cause.Error(),
+	})
+	s.hub.Publish("mailbox.updated", map[string]any{"mailboxId": mb.ID.String(), "syncState": "error"})
 }
 
 func (s *Service) syncIMAPMailbox(ctx context.Context, client *imapclient.Client, acct sqlcgen.Account, mb sqlcgen.Mailbox) (err error) {
