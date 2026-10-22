@@ -459,7 +459,7 @@ paths:
       operationId: deleteMessage
       tags: [messages]
       responses:
-        '202': { description: Message moved to Trash or queued for deletion. }
+        '202': { description: Message moved to Trash, or removed permanently when already there. }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
   /messages/{id}/body:
@@ -722,23 +722,6 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { description: No avatar available for the email address. }
-  /delete-queue:
-    get:
-      operationId: listDeleteQueue
-      tags: [messages]
-      responses:
-        '200':
-          description: Pending permanent deletions.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  items:
-                    type: array
-                    items: { $ref: '#/components/schemas/DeleteQueueItem' }
-                required: [items]
-        '401': { $ref: '#/components/responses/Unauthorized' }
   /threads/{id}:
     parameters:
       - name: id
@@ -1663,16 +1646,6 @@ components:
           items: { $ref: '#/components/schemas/ArchiveEntry' }
         nextCursor: { type: string }
       required: [archives]
-    DeleteQueueItem:
-      type: object
-      properties:
-        id: { type: string, format: uuid }
-        messageId: { type: string, format: uuid }
-        accountId: { type: string, format: uuid }
-        mailboxId: { type: string, format: uuid }
-        deleteAfter: { type: string, format: date-time }
-        status: { type: string }
-      required: [id, messageId, accountId, mailboxId, deleteAfter, status]
     Draft:
       type: object
       properties:
@@ -1806,8 +1779,6 @@ components:
         draftPushDelaySeconds: { type: integer }
         composeWindowMode: { type: string, enum: [in_app, new_window] }
         sendRetryLimit: { type: integer }
-        deleteMode: { type: string, enum: [provider_auto, local_queue] }
-        deleteQueueDays: { type: integer }
         signaturePosition: { type: string, enum: [above_quote, below_quote] }
         networkAvatars: { type: boolean }
         gravatarAvatars: { type: boolean }
@@ -1833,7 +1804,7 @@ components:
         googleSecretSet: { type: boolean }
         microsoftSecretSet: { type: boolean }
         logLevel: { type: string, enum: [debug, info, warn, error] }
-      required: [defaultInitialSyncRange, defaultDownloadScope, preserveMarkedOnAccountDelete, sentSyncMode, draftSyncMode, draftPullIntervalSeconds, draftPushDelaySeconds, composeWindowMode, sendRetryLimit, deleteMode, deleteQueueDays, signaturePosition, networkAvatars, gravatarAvatars, bimiAvatars, googleFaviconAvatars, timezone, language, removeReadImmediately, prependNewMessages, envelopeBatchSize, searchConcurrency, indexBatchSize, autoLocalConcurrency, concurrency, resources, sessionTtlHours, syncIntervalSeconds, pop3IntervalSeconds, bodyPrefetchMaxBytes, maxAttachmentBytes, googleClientId, microsoftClientId, googleSecretSet, microsoftSecretSet]
+      required: [defaultInitialSyncRange, defaultDownloadScope, preserveMarkedOnAccountDelete, sentSyncMode, draftSyncMode, draftPullIntervalSeconds, draftPushDelaySeconds, composeWindowMode, sendRetryLimit, signaturePosition, networkAvatars, gravatarAvatars, bimiAvatars, googleFaviconAvatars, timezone, language, removeReadImmediately, prependNewMessages, envelopeBatchSize, searchConcurrency, indexBatchSize, autoLocalConcurrency, concurrency, resources, sessionTtlHours, syncIntervalSeconds, pop3IntervalSeconds, bodyPrefetchMaxBytes, maxAttachmentBytes, googleClientId, microsoftClientId, googleSecretSet, microsoftSecretSet]
     SettingsUpdate:
       type: object
       properties:
@@ -1846,8 +1817,6 @@ components:
         draftPushDelaySeconds: { type: integer }
         composeWindowMode: { type: string, enum: [in_app, new_window] }
         sendRetryLimit: { type: integer, minimum: 0, maximum: 10 }
-        deleteMode: { type: string, enum: [provider_auto, local_queue] }
-        deleteQueueDays: { type: integer, minimum: 1, maximum: 365 }
         signaturePosition: { type: string, enum: [above_quote, below_quote] }
         networkAvatars: { type: boolean }
         gravatarAvatars: { type: boolean }

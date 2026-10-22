@@ -61,20 +61,6 @@ type Attachment struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-type DeleteQueue struct {
-	ID          uuid.UUID `json:"id"`
-	MessageID   uuid.UUID `json:"message_id"`
-	AccountID   uuid.UUID `json:"account_id"`
-	MailboxID   uuid.UUID `json:"mailbox_id"`
-	Uid         *int64    `json:"uid"`
-	DeleteAfter time.Time `json:"delete_after"`
-	Status      string    `json:"status"`
-	Attempts    int32     `json:"attempts"`
-	LastError   string    `json:"last_error"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-}
-
 type Draft struct {
 	ID                uuid.UUID       `json:"id"`
 	AccountID         uuid.UUID       `json:"account_id"`

@@ -355,7 +355,8 @@ func (s *Service) refreshMailboxCounts(ctx context.Context, mailboxID uuid.UUID)
 	})
 }
 
-// Delete moves a message to Trash or permanently removes it when already there.
+// Delete moves a message to the account's Trash folder. A message that is
+// already in Trash is removed from the server permanently.
 func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 	msg, err := s.Get(ctx, id)
 	if err != nil {
@@ -369,32 +370,6 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 	if err != nil {
 		return fmt.Errorf("load mailbox: %w", err)
 	}
-	settings, err := s.store.ListSettings(ctx)
-	if err != nil {
-		return fmt.Errorf("load settings: %w", err)
-	}
-	deleteMode, deleteDays := deletePolicy(settings)
-	if acct.ReceiveProtocol == "pop3" {
-		if mb.Role != "trash" {
-			trash, trashErr := s.store.GetMailboxByRole(ctx, sqlcgen.GetMailboxByRoleParams{AccountID: msg.AccountID, Role: "trash"})
-			if trashErr == nil && trash.ID != mb.ID {
-				if err := s.Move(ctx, id, trash.ID); err != nil {
-					return err
-				}
-				if deleteMode == "local_queue" {
-					_, err := s.store.EnqueueDelete(ctx, sqlcgen.EnqueueDeleteParams{
-						ID: uuid.MustParse(platform.NewID()), MessageID: msg.ID, AccountID: msg.AccountID,
-						MailboxID: trash.ID, Uid: nil, DeleteAfter: time.Now().UTC().Add(time.Duration(deleteDays) * 24 * time.Hour),
-					})
-					if err != nil {
-						return fmt.Errorf("enqueue delete: %w", err)
-					}
-				}
-				return nil
-			}
-		}
-		return s.PermanentlyDelete(ctx, msg, acct)
-	}
 	target, targetErr := s.store.GetMailboxByRole(ctx, sqlcgen.GetMailboxByRoleParams{AccountID: msg.AccountID, Role: "trash"})
 	if targetErr != nil {
 		// Servers without a Trash folder usually still expose Junk; keeping the
@@ -404,23 +379,20 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 	if targetErr != nil {
 		return ErrNoDeleteTarget
 	}
-	if mb.ID != target.ID {
-		if err := s.Move(ctx, id, target.ID); err != nil {
-			return err
-		}
-		if deleteMode == "local_queue" {
-			_, err := s.store.EnqueueDelete(ctx, sqlcgen.EnqueueDeleteParams{
-				ID: uuid.MustParse(platform.NewID()), MessageID: msg.ID, AccountID: msg.AccountID,
-				MailboxID: target.ID, Uid: msg.Uid, DeleteAfter: time.Now().UTC().Add(time.Duration(deleteDays) * 24 * time.Hour),
-			})
-			if err != nil {
-				return fmt.Errorf("enqueue delete: %w", err)
-			}
-		}
-		return nil
+	if mb.ID == target.ID {
+		return s.PermanentlyDelete(ctx, msg, acct)
 	}
-	if err := s.PermanentlyDelete(ctx, msg, acct); err != nil {
+	if err := s.Move(ctx, id, target.ID); err != nil {
 		return err
+	}
+	if acct.ReceiveProtocol == "pop3" && acct.Pop3DeleteOnServer && msg.Pop3Uidl != nil {
+		payload, _ := json.Marshal(map[string]string{"uidl": *msg.Pop3Uidl})
+		if _, err := s.store.EnqueuePendingOp(ctx, sqlcgen.EnqueuePendingOpParams{
+			ID: uuid.MustParse(platform.NewID()), AccountID: msg.AccountID, MailboxID: &target.ID,
+			MessageID: &msg.ID, Uid: nil, Kind: "pop3_delete", Payload: payload,
+		}); err != nil {
+			s.logger.Warn("queue pop3 delete op", "message", msg.ID, "error", err)
+		}
 	}
 	return nil
 }
@@ -429,11 +401,14 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 // without an IMAP UID are local placeholders for a message that already moved
 // away, so no remote operation is queued for them.
 func (s *Service) PermanentlyDelete(ctx context.Context, msg sqlcgen.Message, acct sqlcgen.Account) error {
+	// The local row is removed at the end of this call, and pending_ops cascades
+	// on message deletion, so the ops cannot reference message_id. They act on
+	// the remote copy through mailbox and UID instead.
 	if acct.ReceiveProtocol == "imap" && msg.Uid != nil {
 		payload, _ := json.Marshal(map[string]any{})
 		if _, err := s.store.EnqueuePendingOp(ctx, sqlcgen.EnqueuePendingOpParams{
 			ID: uuid.MustParse(platform.NewID()), AccountID: msg.AccountID, MailboxID: &msg.MailboxID,
-			MessageID: &msg.ID, Uid: msg.Uid, Kind: "delete", Payload: payload,
+			Uid: msg.Uid, Kind: "delete", Payload: payload,
 		}); err != nil {
 			s.logger.Warn("queue delete op", "message", msg.ID, "error", err)
 		}
@@ -442,7 +417,7 @@ func (s *Service) PermanentlyDelete(ctx context.Context, msg sqlcgen.Message, ac
 		payload, _ := json.Marshal(map[string]string{"uidl": *msg.Pop3Uidl})
 		if _, err := s.store.EnqueuePendingOp(ctx, sqlcgen.EnqueuePendingOpParams{
 			ID: uuid.MustParse(platform.NewID()), AccountID: msg.AccountID, MailboxID: &msg.MailboxID,
-			MessageID: &msg.ID, Uid: nil, Kind: "pop3_delete", Payload: payload,
+			Kind: "pop3_delete", Payload: payload,
 		}); err != nil {
 			s.logger.Warn("queue pop3 delete op", "message", msg.ID, "error", err)
 		}
@@ -600,25 +575,6 @@ func toggleFlag(flags []string, flag string, add bool) []string {
 		out = append(out, flag)
 	}
 	return out
-}
-
-func deletePolicy(rows []sqlcgen.Setting) (string, int) {
-	mode, days := "provider_auto", 30
-	for _, row := range rows {
-		switch row.Key {
-		case "delete_mode":
-			var v string
-			if json.Unmarshal(row.Value, &v) == nil && v != "" {
-				mode = v
-			}
-		case "delete_queue_days":
-			var v int
-			if json.Unmarshal(row.Value, &v) == nil && v > 0 {
-				days = v
-			}
-		}
-	}
-	return mode, days
 }
 
 func messageFromUnified(row sqlcgen.ListUnifiedMessagesRow) sqlcgen.Message {

@@ -278,12 +278,6 @@ const (
 	SettingsDefaultInitialSyncRangeN3d SettingsDefaultInitialSyncRange = "3d"
 )
 
-// Defines values for SettingsDeleteMode.
-const (
-	SettingsDeleteModeLocalQueue   SettingsDeleteMode = "local_queue"
-	SettingsDeleteModeProviderAuto SettingsDeleteMode = "provider_auto"
-)
-
 // Defines values for SettingsDraftSyncMode.
 const (
 	SettingsDraftSyncModeLocal  SettingsDraftSyncMode = "local"
@@ -338,12 +332,6 @@ const (
 	SettingsUpdateDefaultInitialSyncRangeN1w SettingsUpdateDefaultInitialSyncRange = "1w"
 	SettingsUpdateDefaultInitialSyncRangeN1y SettingsUpdateDefaultInitialSyncRange = "1y"
 	SettingsUpdateDefaultInitialSyncRangeN3d SettingsUpdateDefaultInitialSyncRange = "3d"
-)
-
-// Defines values for SettingsUpdateDeleteMode.
-const (
-	SettingsUpdateDeleteModeLocalQueue   SettingsUpdateDeleteMode = "local_queue"
-	SettingsUpdateDeleteModeProviderAuto SettingsUpdateDeleteMode = "provider_auto"
 )
 
 // Defines values for SettingsUpdateDraftSyncMode.
@@ -632,16 +620,6 @@ type ConnectionTestResult struct {
 	Errors    []string `json:"errors"`
 	ReceiveOk bool     `json:"receiveOk"`
 	SmtpOk    bool     `json:"smtpOk"`
-}
-
-// DeleteQueueItem defines model for DeleteQueueItem.
-type DeleteQueueItem struct {
-	AccountId   openapi_types.UUID `json:"accountId"`
-	DeleteAfter time.Time          `json:"deleteAfter"`
-	Id          openapi_types.UUID `json:"id"`
-	MailboxId   openapi_types.UUID `json:"mailboxId"`
-	MessageId   openapi_types.UUID `json:"messageId"`
-	Status      string             `json:"status"`
 }
 
 // DiscoveryEndpoint defines model for DiscoveryEndpoint.
@@ -1015,8 +993,6 @@ type Settings struct {
 	Concurrency                   ConcurrencySettings             `json:"concurrency"`
 	DefaultDownloadScope          SettingsDefaultDownloadScope    `json:"defaultDownloadScope"`
 	DefaultInitialSyncRange       SettingsDefaultInitialSyncRange `json:"defaultInitialSyncRange"`
-	DeleteMode                    SettingsDeleteMode              `json:"deleteMode"`
-	DeleteQueueDays               int                             `json:"deleteQueueDays"`
 	DraftPullIntervalSeconds      int                             `json:"draftPullIntervalSeconds"`
 	DraftPushDelaySeconds         int                             `json:"draftPushDelaySeconds"`
 	DraftSyncMode                 SettingsDraftSyncMode           `json:"draftSyncMode"`
@@ -1055,9 +1031,6 @@ type SettingsDefaultDownloadScope string
 // SettingsDefaultInitialSyncRange defines model for Settings.DefaultInitialSyncRange.
 type SettingsDefaultInitialSyncRange string
 
-// SettingsDeleteMode defines model for Settings.DeleteMode.
-type SettingsDeleteMode string
-
 // SettingsDraftSyncMode defines model for Settings.DraftSyncMode.
 type SettingsDraftSyncMode string
 
@@ -1081,8 +1054,6 @@ type SettingsUpdate struct {
 	ComposeWindowMode             *SettingsUpdateComposeWindowMode       `json:"composeWindowMode,omitempty"`
 	DefaultDownloadScope          *SettingsUpdateDefaultDownloadScope    `json:"defaultDownloadScope,omitempty"`
 	DefaultInitialSyncRange       *SettingsUpdateDefaultInitialSyncRange `json:"defaultInitialSyncRange,omitempty"`
-	DeleteMode                    *SettingsUpdateDeleteMode              `json:"deleteMode,omitempty"`
-	DeleteQueueDays               *int                                   `json:"deleteQueueDays,omitempty"`
 	DraftPullIntervalSeconds      *int                                   `json:"draftPullIntervalSeconds,omitempty"`
 	DraftPushDelaySeconds         *int                                   `json:"draftPushDelaySeconds,omitempty"`
 	DraftSyncMode                 *SettingsUpdateDraftSyncMode           `json:"draftSyncMode,omitempty"`
@@ -1121,9 +1092,6 @@ type SettingsUpdateDefaultDownloadScope string
 
 // SettingsUpdateDefaultInitialSyncRange defines model for SettingsUpdate.DefaultInitialSyncRange.
 type SettingsUpdateDefaultInitialSyncRange string
-
-// SettingsUpdateDeleteMode defines model for SettingsUpdate.DeleteMode.
-type SettingsUpdateDeleteMode string
 
 // SettingsUpdateDraftSyncMode defines model for SettingsUpdate.DraftSyncMode.
 type SettingsUpdateDraftSyncMode string
@@ -1466,9 +1434,6 @@ type ServerInterface interface {
 	// (GET /avatars)
 	GetAvatar(w http.ResponseWriter, r *http.Request, params GetAvatarParams)
 
-	// (GET /delete-queue)
-	ListDeleteQueue(w http.ResponseWriter, r *http.Request)
-
 	// (GET /drafts)
 	ListDrafts(w http.ResponseWriter, r *http.Request, params ListDraftsParams)
 
@@ -1721,11 +1686,6 @@ func (_ Unimplemented) SetupOwner(w http.ResponseWriter, r *http.Request) {
 
 // (GET /avatars)
 func (_ Unimplemented) GetAvatar(w http.ResponseWriter, r *http.Request, params GetAvatarParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// (GET /delete-queue)
-func (_ Unimplemented) ListDeleteQueue(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2595,20 +2555,6 @@ func (siw *ServerInterfaceWrapper) GetAvatar(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetAvatar(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListDeleteQueue operation middleware
-func (siw *ServerInterfaceWrapper) ListDeleteQueue(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListDeleteQueue(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3765,9 +3711,6 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/avatars", wrapper.GetAvatar)
-	})
-	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/delete-queue", wrapper.ListDeleteQueue)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/drafts", wrapper.ListDrafts)

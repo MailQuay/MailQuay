@@ -341,7 +341,7 @@ frontend/
 | `outbox_send` | `--task-send` | 绿色, 发件队列 |
 | `body_fetch` / `mark_cache` / `archive_cache` | `--task-fetch` | 青色, 拉取正文和附件 |
 | `search_index` | `--task-index` | 紫色, Bleve 索引 |
-| `account_purge` / `delete_queue` | `--task-muted` | 灰蓝色, 清理任务 |
+| `account_purge` | `--task-muted` | 灰蓝色, 清理任务 |
 | 失败状态 | `--task-error` | 红色, 覆盖对应弧段 |
 
 悬停任务面板:
@@ -397,7 +397,6 @@ frontend/
 - 邮箱账号页面的删除对话框说明异步清理范围和标记邮件保留规则.
 - 发送与草稿页面控制已发送拉取开关, 草稿同步模式 (`local`/`pull`/`mirror`), 拉取间隔, 推送延迟, 写邮件窗口形态 (`in_app`/`new_window`) 和自动重试次数.
 - 自动重试次数设置 `send_retry_limit` 默认 3, 范围 0-10; 永久错误不重试.
-- 同步与存储页面提供删除模式 (`provider_auto`/`local_queue`) 和本地队列保留天数, 默认 30 天.
 - 草稿本地自动保存 2 秒防抖, 最长 10 秒; 输入过程中不调用远端 IMAP.
 - 性能与并发页面显示检测到的 CPU, 内存和 cgroup 版本, 同步和拉取并发以及信封批大小可编辑, 搜索并发和索引批大小按检测结果只读显示.
 - 性能与并发页面提供"重新检测", 只刷新本地推荐值; 同步和拉取并发保存后立即作用于新任务.
@@ -487,7 +486,6 @@ frontend/
 | `attachments` | `id`, `message_id`, `part_path`, `filename`, `content_type`, `size`, `sha256`, `disposition`, `content_id` | 附件元数据与 blob 引用 |
 | `uploaded_attachments` | `id`, `filename`, `content_type`, `size`, `sha256` | 写邮件上传的附件, 发送时从 blob 读取 |
 | `local_archives` | `id`, `origin_account_id`, `origin_account_email`, `origin_mailbox_path`, `message_id_header`, `subject`, `from`, `to`, `cc`, `bcc`, `sent_at`, `received_at`, `size`, `raw_sha256`, `text_sha256`, `has_attachments`, `attachments`, `archived_at` | 独立本地归档; 不级联账号或文件夹, 保存完整原文和附件元数据 |
-| `delete_queue` | `id`, `message_id`, `account_id`, `mailbox_id`, `uid`, `delete_after`, `status`, `attempts`, `last_error`, `created_at` | 本地删除队列; `status` 为 `pending`, `deleted`, `failed` |
 | `threads` | `id`, `account_id`, `subject_norm`, `last_message_at`, `message_count` | 会话归并结果 |
 | `drafts` | `id`, `account_id`, `identity_account_id`, `identity_email`, `in_reply_to`, `headers`, `body_text`, `body_html`, `attachments`, `revision`, `content_hash`, `origin`, `remote_uid`, `remote_uidvalidity`, `sync_state`, `conflict_of`, `status`, `sent_message_id`, `last_error`, `updated_at` | `status` 为 `editing`, `sending`, `failed`, `copy_failed`, `sent`; `sent` 后只移出草稿列表, 不删除行 |
 | `outbox` | `id`, `account_id`, `identity_account_id`, `identity_email`, `draft_id`, `message_id_header`, `status`, `scheduled_at`, `attempts`, `next_attempt_at`, `lease_until`, `last_error`, `sent_at` | `scheduled`, `pending`, `sending`, `sent`, `failed`, `copy_failed`, `cancelled`; `scheduled_at` 为 UTC |
@@ -495,7 +493,7 @@ frontend/
 | `search_jobs` | `id`, `message_id`, `op`, `status`, `attempts`, `next_attempt_at`, `lease_until`, `last_error`, `created_at` | Bleve 索引任务; `op` 为 `index` 或 `delete`, `status` 为 `pending`, `processing`, `done`, `failed` |
 | `tasks` | `id`, `type`, `account_id`, `status`, `done`, `total`, `unit`, `message`, `error`, `started_at`, `updated_at`, `completed_at`, `dismissed_at` | 用户可见后台任务; `type` 包含 `scope_reconcile`; `status` 为 `pending`, `running`, `completed`, `failed`, `cancelled` |
 | `oauth_states` | `state`, `provider`, `verifier_enc`, `redirect_after`, `expires_at` | 10 分钟过期, 用后删除 |
-| `settings` | `key`, `value` | 全局设置; 包括同步间隔, 下载范围, 发送, 草稿, 标记保留, 签名, 写邮件窗口, 重试次数, 删除策略, 会话有效期, 附件与预取上限, OAuth 客户端与加密密钥, 网络头像来源, 日志级别和并发参数 |
+| `settings` | `key`, `value` | 全局设置; 包括同步间隔, 下载范围, 发送, 草稿, 标记保留, 签名, 写邮件窗口, 重试次数, 会话有效期, 附件与预取上限, OAuth 客户端与加密密钥, 网络头像来源, 日志级别和并发参数 |
 
 ### 5.2 约束与索引
 
@@ -513,7 +511,6 @@ frontend/
 - `tasks(type, account_id)` 在 `status IN ('pending', 'running')` 时唯一; `tasks(status, updated_at)` 支持活动任务查询.
 - `tasks(status, updated_at)` 支持活动任务查询; `tasks(type, account_id)` 只约束未结束任务.
 - `local_archives(origin_account_id, message_id_header)` 在 Message-ID 非空时唯一; 另建 `raw_sha256` 唯一索引去重.
-- `delete_queue(status, delete_after)` 支持到期 worker 领取.
 
 ## 6. HTTP API
 
@@ -587,7 +584,7 @@ frontend/
 | `GET` | `/messages/{id}/attachments/{attachmentId}` | 附件下载 |
 | `PATCH` | `/messages/{id}` | 更新已读, 本地标记等状态并返回完整详情; 归档使用独立动作 |
 | `POST` | `/messages/{id}/move` | 移动到目标文件夹 |
-| `DELETE` | `/messages/{id}` | 按删除设置移入 Trash 或写入删除队列 |
+| `DELETE` | `/messages/{id}` | 移入 Trash(没有 Trash 时回退 Junk); 已在 Trash 时永久删除 |
 | `POST` | `/messages/{id}/archive` | 复制完整邮件到本地归档 |
 | `POST` | `/messages/batch` | 批量已读, 标记, 归档, 移动, 删除 |
 | `GET` | `/archive` | 本地归档列表 |
@@ -595,7 +592,6 @@ frontend/
 | `GET` | `/archive/{id}/body` | 本地归档的正文和附件元数据 |
 | `GET` | `/archive/{id}/raw` | 本地归档原始 MIME |
 | `GET` | `/archive/{id}/attachments/{attachmentId}` | 本地归档附件 |
-| `GET` | `/delete-queue` | 待永久删除的本地队列 |
 | `GET` | `/threads/{id}` | 会话内邮件列表 |
 
 ### 6.5 草稿, 发件与搜索

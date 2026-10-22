@@ -99,8 +99,6 @@ func (s *Service) Start(parent context.Context) {
 	go s.bodyWorker(ctx)
 	s.wg.Add(1)
 	go s.opsWorker(ctx)
-	s.wg.Add(1)
-	go s.deleteQueueWorker(ctx)
 }
 
 // Stop terminates all workers.

@@ -211,6 +211,40 @@ func TestIMAPDeleteMovesToTrash(t *testing.T) {
 		t.Fatal("adopted message has no destination uid")
 	}
 
+	// Deleting a message that is already in Trash permanently removes it and
+	// queues the matching IMAP delete.
+	if err := messages.Delete(ctx, rows[0].ID); err != nil {
+		t.Fatalf("delete from trash: %v", err)
+	}
+	if _, err := st.GetMessage(ctx, rows[0].ID); err == nil {
+		t.Fatal("message still present after permanent delete")
+	}
+	ops, err = st.ListPendingOps(ctx, sqlcgen.ListPendingOpsParams{AccountID: acct.ID, Limit: 50})
+	if err != nil {
+		t.Fatal(err)
+	}
+	queued := false
+	for _, op := range ops {
+		if op.Kind == "delete" && op.Uid != nil && trashRows[0].Uid != nil && *op.Uid == *trashRows[0].Uid {
+			queued = true
+		}
+	}
+	if !queued {
+		t.Fatal("permanent delete did not queue an IMAP delete")
+	}
+	if err := syncer.ProcessOpsNow(ctx, acct.ID); err != nil {
+		t.Fatal(err)
+	}
+	ops, err = st.ListPendingOps(ctx, sqlcgen.ListPendingOpsParams{AccountID: acct.ID, Limit: 50})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, op := range ops {
+		if op.Kind == "delete" {
+			t.Fatalf("IMAP delete op still pending after sync: %+v", op)
+		}
+	}
+
 	// An account without a Trash or Junk role must refuse to delete instead of
 	// falling back to a permanent removal.
 	second := []byte("From: Alice <alice@example.com>\r\nTo: bob@example.com\r\nSubject: No trash\r\nMessage-ID: <no-trash@example.com>\r\nDate: Mon, 20 Oct 2025 11:00:00 +0000\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nbody\r\n")

@@ -339,23 +339,6 @@ func (s *Server) GetThread(w http.ResponseWriter, r *http.Request, id openapiUUI
 	writeJSON(w, http.StatusOK, map[string]any{"messages": s.mapMessages(r, rows)})
 }
 
-func (s *Server) ListDeleteQueue(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.store.ListPendingDeletes(r.Context())
-	if err != nil {
-		s.internal(w, r, err)
-		return
-	}
-	items := make([]oapi.DeleteQueueItem, 0, len(rows))
-	for _, row := range rows {
-		items = append(items, oapi.DeleteQueueItem{
-			Id: openapiUUID(row.ID), MessageId: openapiUUID(row.MessageID),
-			AccountId: openapiUUID(row.AccountID), MailboxId: openapiUUID(row.MailboxID),
-			DeleteAfter: row.DeleteAfter.UTC(), Status: row.Status,
-		})
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items})
-}
-
 func (s *Server) mapMessages(r *http.Request, rows []sqlcgen.Message) []oapi.MessageSummary {
 	accounts, _ := s.store.ListAccounts(r.Context())
 	accountMap := make(map[uuid.UUID]sqlcgen.Account, len(accounts))

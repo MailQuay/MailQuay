@@ -442,7 +442,7 @@ sequenceDiagram
 - BIMI 读取 `default._bimi` 的 `l=` SVG, 不校验证书; 仅允许 HTTPS 443 和非私有地址, 限制大小并拒绝脚本, 事件处理器和外部引用, 防止 SSRF 和脚本注入.
 - 修改后新任务和新请求立即使用新值; 正在运行的同步或发送任务继续使用旧值.
 
-### 4.8 本地归档与删除队列
+### 4.8 本地归档与删除
 
 本地归档:
 
@@ -457,13 +457,10 @@ sequenceDiagram
 删除:
 
 - 账号保存 `auto_detect_special_folders` 和 `special_folders` (角色到远端路径); 关闭自动识别时只使用手动配置. 账号更新后立即按已存文件夹重算角色, 同步时再按 `LIST` 结果重新仲裁.
-- 默认 `delete_mode=provider_auto`: 删除动作把邮件移动到 Trash, 由邮件服务按自己的策略自动清理; 服务商没有 Trash 文件夹时回退到 Junk; 两者都没有时拒绝删除并返回 `delete_target_missing`, 不能静默永久删除.
-- 可选 `delete_mode=local_queue`: 邮件仍移动到 Trash, 同时写入 `delete_queue`, `delete_after = now + delete_queue_days`.
-- `delete_queue_days` 默认 30 天; 到期 worker 永久删除远端邮件和本地记录, 再删除搜索文档.
-- 服务端提前清理了 Trash 邮件时, worker 对账后把队列标记完成.
-- 删除失败进入任务环并重试; 用户可以在设置中切换删除模式.
-- 邮件已在 Trash 时再次删除会永久删除远端邮件; 阅读器确认框必须提示会从服务器永久移除且不可恢复.
-- 已本地归档的邮件不受远端删除, 删除队列和账号删除影响.
+- 删除动作只把邮件移动到 Trash; 服务商没有 Trash 文件夹时回退到 Junk; 两者都没有时拒绝删除并返回 `delete_target_missing`, 不能静默永久删除.
+- 应用不提供本地删除队列或到期自动清理; 邮件已在 Trash 时再次删除会通过 IMAP 永久移除 (`\Deleted` + `UID EXPUNGE`), 阅读器确认框必须提示不可恢复.
+- 删除失败进入任务环并重试.
+- 已本地归档的邮件不受远端删除和账号删除影响.
 
 ## 5. 实时推送
 

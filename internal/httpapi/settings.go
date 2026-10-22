@@ -62,8 +62,6 @@ func mapSettings(snap settings.Snapshot) oapi.Settings {
 		DraftPushDelaySeconds:         v.DraftPushDelaySeconds,
 		ComposeWindowMode:             oapi.SettingsComposeWindowMode(v.ComposeWindowMode),
 		SendRetryLimit:                v.SendRetryLimit,
-		DeleteMode:                    oapi.SettingsDeleteMode(v.DeleteMode),
-		DeleteQueueDays:               v.DeleteQueueDays,
 		SignaturePosition:             oapi.SettingsSignaturePosition(v.SignaturePosition),
 		NetworkAvatars:                v.NetworkAvatars,
 		GravatarAvatars:               v.GravatarAvatars,

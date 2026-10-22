@@ -194,56 +194,6 @@ func (s *Service) retryOp(ctx context.Context, op sqlcgen.PendingOp, cause error
 	})
 }
 
-func (s *Service) deleteQueueWorker(ctx context.Context) {
-	defer s.wg.Done()
-	ticker := time.NewTicker(time.Minute)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			s.processDeleteQueue(ctx)
-		}
-	}
-}
-
-func (s *Service) processDeleteQueue(ctx context.Context) {
-	items, err := s.store.ListDueDeletes(ctx, 100)
-	if err != nil || len(items) == 0 {
-		return
-	}
-	for _, item := range items {
-		msgErr := s.deleteQueued(ctx, item)
-		if msgErr != nil {
-			_ = s.store.MarkDeleteFailed(ctx, sqlcgen.MarkDeleteFailedParams{ID: item.ID, LastError: msgErr.Error()})
-			continue
-		}
-		_ = s.store.MarkDeleteDone(ctx, item.ID)
-	}
-}
-
-func (s *Service) deleteQueued(ctx context.Context, item sqlcgen.DeleteQueue) error {
-	msg, err := s.store.GetMessage(ctx, item.MessageID)
-	if err != nil {
-		return nil
-	}
-	acct, err := s.store.GetAccount(ctx, item.AccountID)
-	if err != nil {
-		return err
-	}
-	if acct.ReceiveProtocol == "imap" && msg.Uid != nil {
-		payload, _ := json.Marshal(map[string]any{})
-		if _, err := s.store.EnqueuePendingOp(ctx, sqlcgen.EnqueuePendingOpParams{
-			ID: uuid.MustParse(platform.NewID()), AccountID: msg.AccountID,
-			MessageID: &msg.ID, MailboxID: &msg.MailboxID, Uid: msg.Uid, Kind: "delete", Payload: payload,
-		}); err != nil {
-			return err
-		}
-	}
-	return s.messages.DeleteLocal(ctx, msg)
-}
-
 func (s *Service) startIdleWorker(parent context.Context, accountID uuid.UUID) {
 	s.mu.Lock()
 	if _, exists := s.idle[accountID]; exists {

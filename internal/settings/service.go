@@ -30,8 +30,6 @@ type Values struct {
 	DraftPushDelaySeconds    int    `json:"draftPushDelaySeconds"`
 	ComposeWindowMode        string `json:"composeWindowMode"`
 	SendRetryLimit           int    `json:"sendRetryLimit"`
-	DeleteMode               string `json:"deleteMode"`
-	DeleteQueueDays          int    `json:"deleteQueueDays"`
 	SignaturePosition        string `json:"signaturePosition"`
 	NetworkAvatars           bool   `json:"networkAvatars"`
 	GravatarAvatars          bool   `json:"gravatarAvatars"`
@@ -106,8 +104,6 @@ func Defaults() Values {
 		DraftPushDelaySeconds:    30,
 		ComposeWindowMode:        "in_app",
 		SendRetryLimit:           3,
-		DeleteMode:               "provider_auto",
-		DeleteQueueDays:          30,
 		SignaturePosition:        "above_quote",
 		NetworkAvatars:           true,
 		GravatarAvatars:          true,
@@ -447,10 +443,6 @@ func decodeInto(key string, raw json.RawMessage, v *Values) error {
 		return json.Unmarshal(raw, &v.ComposeWindowMode)
 	case "send_retry_limit":
 		return json.Unmarshal(raw, &v.SendRetryLimit)
-	case "delete_mode":
-		return json.Unmarshal(raw, &v.DeleteMode)
-	case "delete_queue_days":
-		return json.Unmarshal(raw, &v.DeleteQueueDays)
 	case "signature_position":
 		return json.Unmarshal(raw, &v.SignaturePosition)
 	case "network_avatars":
@@ -521,10 +513,6 @@ func setField(key string, raw json.RawMessage, v *Values) error {
 		return json.Unmarshal(raw, &v.ComposeWindowMode)
 	case "send_retry_limit":
 		return json.Unmarshal(raw, &v.SendRetryLimit)
-	case "delete_mode":
-		return json.Unmarshal(raw, &v.DeleteMode)
-	case "delete_queue_days":
-		return json.Unmarshal(raw, &v.DeleteQueueDays)
 	case "signature_position":
 		return json.Unmarshal(raw, &v.SignaturePosition)
 	case "network_avatars":
@@ -595,10 +583,6 @@ func fieldValue(key string, v Values) (any, error) {
 		return v.ComposeWindowMode, nil
 	case "send_retry_limit":
 		return v.SendRetryLimit, nil
-	case "delete_mode":
-		return v.DeleteMode, nil
-	case "delete_queue_days":
-		return v.DeleteQueueDays, nil
 	case "signature_position":
 		return v.SignaturePosition, nil
 	case "network_avatars":
@@ -671,12 +655,6 @@ func validate(v Values) error {
 	}
 	if v.SendRetryLimit < 0 || v.SendRetryLimit > 10 {
 		return errors.New("sendRetryLimit must be 0-10")
-	}
-	if v.DeleteMode != "provider_auto" && v.DeleteMode != "local_queue" {
-		return errors.New("invalid deleteMode")
-	}
-	if v.DeleteQueueDays < 1 || v.DeleteQueueDays > 365 {
-		return errors.New("deleteQueueDays must be 1-365")
 	}
 	for _, n := range []int{v.SyncConcurrency, v.FetchConcurrency} {
 		if n < 1 || n > 32 {
