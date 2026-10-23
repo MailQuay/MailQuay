@@ -99,13 +99,14 @@ flowchart TB
 
 ## 4. 邮件接入
 
-### 4.1 邮箱账号, 凭据与身份
+### 4.1 邮箱账号与凭据
 
 只有邮箱账号是 ID 化实体. 用户名, 密码和连接地址直接存在账号上, 不再拆出独立的凭据或连接记录.
 
 账号字段:
 
 - 基础: `id`, `email`, `name`, `provider`.
+- 发信身份: `default_send_name`, `default_reply_to`; 默认发信名称为空时使用 `name`.
 - 认证: `username`, `auth_type` (`password` 或 `oauth2`), `password_enc`, `oauth_provider`, `oauth_scopes`, `oauth_refresh_enc`.
 - 收信: `receive_protocol` (`imap` 或 `pop3`), `imap_addr`, `pop3_addr`.
 - 发信: `smtp_addr`, 可为空; 为空表示只收不发.
@@ -124,8 +125,8 @@ flowchart TB
 规则:
 
 - 新增账号时选择收信协议; 选 IMAP 时填 `imap_addr`, `pop3_addr` 为空; 选 POP3 时相反. `smtp_addr` 可空.
-- 发件身份归属于账号, 不再有独立身份 ID; 账号下用邮箱地址作为身份键, 使用账号的 SMTP 配置发信.
-- 删除账号时同时删除账号上的加密密码, OAuth token 和身份; 默认保留的标记邮件按标记规则处理.
+- 发信始终使用账号自身的邮箱地址和 SMTP; 账号可配置默认发信名称, 留空时使用账号显示名称.
+- 删除账号时同时删除账号上的加密密码和 OAuth token; 默认保留的标记邮件按标记规则处理.
 - 收信和发信分别鉴权: IMAP/POP3 使用账号 `username` 和密码, SMTP 使用 `smtp_username` 和 SMTP 密码; 未单独设置时复用收信凭据.
 - API 永远不返回密码或 token, 只返回 `hasPassword`, `hasSmtpPassword`, `hasOAuth` 等状态.
 - 连接测试按账号 ID 执行, 使用已保存的地址和凭据, 不信任前端临时传入的主机或密码.
@@ -283,8 +284,8 @@ sequenceDiagram
     participant S as SMTP
     participant I as IMAP
 
-    U->>A: POST /messages/send (draft revision, identityAccountId, identityEmail)
-    A->>D: 校验身份和草稿, draft 标记 sending, 写入 outbox
+    U->>A: POST /messages/send (draft id, optional scheduledAt)
+    A->>D: 校验账号和草稿, draft 标记 sending, 写入 outbox
     A-->>U: 202 + outbox id
     O->>D: 领取 pending 记录
     O->>S: SMTP 提交 (XOAUTH2 / 密码)
@@ -301,15 +302,15 @@ sequenceDiagram
     O-->>U: SSE outbox.updated / task.updated
 ```
 
-- 发件窗口顶部显示当前 identity, 点击发送按钮或下拉箭头打开身份选择弹层; 列表支持搜索, 显示 `显示名 <邮箱>`, 按账号分组.
-- identity 决定 `From`, `Reply-To`, 固定 `Bcc`, `Organization` 和签名; 发信统一使用所属账号的 SMTP 配置.
-- identity 保存显示名, 邮箱, 组织, Reply-To, 固定 Bcc, HTML/纯文本签名和签名插入时机; 发信使用所属账号的 SMTP 配置.
-- 签名插入时机为 `all`, `new`, `reply`, `forward`, `none`; 回复时默认放在引用上方, 不覆盖引用内容.
-- 任意身份都可以用于发送或回复, 列表按邮箱账号分组.
-- 点击回复或转发时, 默认使用当前邮件所属邮箱账号的默认身份; 用户可以在发送前切换到任意身份.
-- 新建邮件默认使用当前选中邮箱账号的默认身份; 在全部账号视图下使用上次使用的身份, 没有记录时用全局默认身份.
-- 原邮件所属账号已删除时, 回退到当前账号默认身份, 并在发送窗口提示该邮件是本地保留副本.
-- 发送前生成稳定的 `Message-ID`, 写入草稿并随 outbox 保存, 重试时复用; outbox 同时保存 `identity_account_id`, `identity_email` 和 `draft_id`.
+- 发件窗口顶部显示发件账号, 点击打开账号选择; 每个邮箱账号一项, 显示 `默认发信名称 <邮箱>`.
+- `From` 由账号邮箱和默认发信名称组成, 默认发信名称为空时使用账号显示名称; 发信凭据来自该账号的 SMTP 配置.
+- 账号保存 `default_send_name` 和 `default_reply_to`; 默认 Reply-To 用于新邮件的预填.
+- Reply-To 在写邮件窗体中编辑, 默认使用账号的默认 Reply-To, 未配置时使用发件人邮箱; 草稿把 Reply-To 存在 `headers.replyTo`.
+- 任意邮箱账号都可以用于发送或回复.
+- 点击回复或转发时, 默认使用当前邮件所属邮箱账号; 用户可以在发送前切换到其他账号.
+- 新建邮件默认使用当前选中邮箱账号; 在全部账号视图下使用上次使用的账号, 没有记录时用第一个账号.
+- 原邮件所属账号已删除时, 回退到当前账号, 并在发送窗口提示该邮件是本地保留副本.
+- 发送前生成稳定的 `Message-ID`, 写入草稿并随 outbox 保存, 重试时复用; outbox 同时保存 `account_id` 和 `draft_id`.
 - 发送前不复制邮件. 草稿是唯一来源, outbox 只引用草稿; 发送成功后把草稿标记为 `sent`, 生成已发送记录并移出草稿列表, 不做删除.
 - 支持定时发送: 写邮件窗口选择日期和时间, 按用户时区转换后以 UTC 写入 `outbox.scheduled_at`; 到期前状态为 `scheduled`.
 - 定时发送到期前不会连接 SMTP; worker 只领取 `scheduled_at <= now` 的记录, 然后转为 `pending`.
@@ -582,14 +583,14 @@ HTTP 层注意:
 - 顶栏刷新是服务端拉取: 全局视图 `POST /sync` 触发所有账号同步, 文件夹视图 `POST /mailboxes/{id}/sync` 触发所属账号同步, 任务中心只重新读取 `GET /tasks`.
 - 登录用户头像悬停展开卡片, 显示头像, 名称, 邮箱, 设置入口和退出; 侧边栏顶部是全局收藏夹, 下面是默认折叠的邮箱账号列表.
 - 设置的每个分组是独立全屏页面, 有固定路径, 共用左侧导航, 登录用户头部, 搜索框和关闭按钮; 不套用主应用壳.
-- 写邮件窗口点击顶栏"写邮件"打开, 左上角发送按钮和下拉箭头打开身份选择; 身份列表跨账号按账号分组, 支持搜索.
+- 写邮件窗口点击顶栏"写邮件"打开, 左上角发送按钮和下拉箭头打开发件账号选择; 列表每个邮箱账号一项.
 - 新窗口模式打开独立 `/compose` 页面, 草稿 ID 通过 `window.name` 传递, 跨窗口草稿同步和窗口聚焦使用 `BroadcastChannel`; 不使用路径参数或查询参数.
 - 阅读器顶部左侧是回复和转发, 右侧是标记, 本地归档和删除; 全部使用图标按钮, 带 `aria-label` 和 tooltip, 不放在全局顶栏.
 - 添加账号使用引导流程: 先输入邮箱和密码, 自动发现服务器; 再确认收信协议和 SMTP 地址; 然后分别确认收信和发信凭据; 最后设置显示名称和同步范围.
 - 收信凭据和发信凭据默认都复用邮箱和密码, 可以分别修改; 编辑已有账号时同样可以单独更新 SMTP 用户名和密码.
 - 账号表单的邮箱和密码使用单行 `textarea` 渲染, 并带密码管理器忽略属性, 避免浏览器自动填充和扩展弹窗把邮箱账号当成登录凭据.
 - TanStack Query 持有所有服务端状态. 组件不直接发请求, 统一走 `features/*/api.ts`.
-- Zustand 只保存界面状态: 当前账号与文件夹, 搜索条件, 侧边栏折叠, 选中邮件, 写邮件窗口, 当前身份, 主题和移动端视图.
+- Zustand 只保存界面状态: 当前账号与文件夹, 搜索条件, 侧边栏折叠, 选中邮件, 写邮件窗口, 当前发件账号, 主题和移动端视图.
 - SSE 事件只做缓存失效和局部更新, 不复制完整邮件对象.
 - 未读, 标记, 归档使用乐观更新, 失败时回滚并提示.
 - 邮件列表使用虚拟滚动, 阅读器正文在独立 iframe 中渲染.

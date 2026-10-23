@@ -12,7 +12,7 @@ func TestMapAccountSpecialFolders(t *testing.T) {
 		AutoDetectSpecialFolders: false,
 		SpecialFolders:           []byte(`{"trash":"Deleted Items","sent":"Sent Items"}`),
 	}
-	mapped := mapAccount(account, nil)
+	mapped := mapAccount(account)
 	if mapped.AutoDetectSpecialFolders == nil || *mapped.AutoDetectSpecialFolders {
 		t.Fatal("auto detect flag not mapped")
 	}

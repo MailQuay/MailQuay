@@ -20,7 +20,6 @@ import (
 	"github.com/mailquay/mailquay/internal/config"
 	"github.com/mailquay/mailquay/internal/crypto"
 	"github.com/mailquay/mailquay/internal/events"
-	"github.com/mailquay/mailquay/internal/identity"
 	"github.com/mailquay/mailquay/internal/imapclient"
 	"github.com/mailquay/mailquay/internal/mailbox"
 	"github.com/mailquay/mailquay/internal/mailsession"
@@ -106,7 +105,6 @@ func TestIMAPInitialSyncAndBodyFetch(t *testing.T) {
 	hub := events.NewHub()
 	settingsSvc := settings.NewService(st, platform.Resources{CPUs: 2, MemoryBytes: 4 << 30}, cipher, settings.Bootstrap{SyncInterval: time.Minute, POP3Interval: time.Minute, BodyPrefetchMax: 2 << 20, MaxAttachment: 25 << 20})
 	accounts := account.NewService(st, cipher, logger)
-	ids := identity.NewService(st)
 	mailboxes := mailbox.NewService(st)
 	messages := message.NewService(st, hub, blobs, logger)
 	syncer := mailsync.NewService(st, cfg, logger, hub, blobs, accounts, mailboxes, messages, settingsSvc, nil, mailsession.NewPool(time.Minute))
@@ -121,7 +119,6 @@ func TestIMAPInitialSyncAndBodyFetch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = ids
 	if err := syncer.SyncNow(ctx, acct.ID); err != nil {
 		t.Fatal(err)
 	}

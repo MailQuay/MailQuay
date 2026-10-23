@@ -22,7 +22,6 @@ import (
 	"github.com/mailquay/mailquay/internal/crypto"
 	"github.com/mailquay/mailquay/internal/events"
 	"github.com/mailquay/mailquay/internal/httpapi"
-	"github.com/mailquay/mailquay/internal/identity"
 	"github.com/mailquay/mailquay/internal/mailbox"
 	"github.com/mailquay/mailquay/internal/mailsession"
 	"github.com/mailquay/mailquay/internal/message"
@@ -113,7 +112,6 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	sessions := mailsession.NewPool(sessionIdleTimeout)
 	accounts := account.NewService(st, cipher, logger)
 	accounts.SetSettings(settingsSvc)
-	ids := identity.NewService(st)
 	mailboxes := mailbox.NewService(st)
 	messages := message.NewService(st, hub, blobs, logger)
 	if removed, err := messages.CleanupMovedDuplicates(ctx); err != nil {
@@ -121,7 +119,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 	} else if removed > 0 {
 		logger.Info("removed duplicate moved messages", "count", removed)
 	}
-	composeSvc := compose.NewService(st, accounts, ids, settingsSvc, messages, blobs, hub, logger, pacer, sessions)
+	composeSvc := compose.NewService(st, accounts, settingsSvc, messages, blobs, hub, logger, pacer, sessions)
 	syncSvc := syncservice.NewService(st, cfg, logger, hub, blobs, accounts, mailboxes, messages, settingsSvc, pacer, sessions)
 
 	indexer := NewIndexer(st, index, blobs, hub, settingsSvc, logger)
@@ -168,7 +166,7 @@ func New(ctx context.Context, cfg *config.Config) (*App, error) {
 		st.Close()
 		return nil, err
 	}
-	server := httpapi.NewServer(st, cfg, authSvc, accounts, ids, mailboxes, messages, composeSvc, settingsSvc, syncSvc, index, hub, blobs, logger, cipher)
+	server := httpapi.NewServer(st, cfg, authSvc, accounts, mailboxes, messages, composeSvc, settingsSvc, syncSvc, index, hub, blobs, logger, cipher)
 	handler := httpapi.NewRouter(server, hub, logger)
 	httpServer := &http.Server{
 		Addr:              cfg.ListenAddr,

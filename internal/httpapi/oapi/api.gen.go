@@ -201,24 +201,6 @@ const (
 	EmclientImportAccountReceiveProtocolPop3 EmclientImportAccountReceiveProtocol = "pop3"
 )
 
-// Defines values for IdentitySignatureMode.
-const (
-	IdentitySignatureModeAll     IdentitySignatureMode = "all"
-	IdentitySignatureModeForward IdentitySignatureMode = "forward"
-	IdentitySignatureModeNew     IdentitySignatureMode = "new"
-	IdentitySignatureModeNone    IdentitySignatureMode = "none"
-	IdentitySignatureModeReply   IdentitySignatureMode = "reply"
-)
-
-// Defines values for IdentityInputSignatureMode.
-const (
-	IdentityInputSignatureModeAll     IdentityInputSignatureMode = "all"
-	IdentityInputSignatureModeForward IdentityInputSignatureMode = "forward"
-	IdentityInputSignatureModeNew     IdentityInputSignatureMode = "new"
-	IdentityInputSignatureModeNone    IdentityInputSignatureMode = "none"
-	IdentityInputSignatureModeReply   IdentityInputSignatureMode = "reply"
-)
-
 // Defines values for MailboxRole.
 const (
 	MailboxRoleArchive MailboxRole = "archive"
@@ -305,12 +287,6 @@ const (
 	SettingsSentSyncModePull SettingsSentSyncMode = "pull"
 )
 
-// Defines values for SettingsSignaturePosition.
-const (
-	SettingsSignaturePositionAboveQuote SettingsSignaturePosition = "above_quote"
-	SettingsSignaturePositionBelowQuote SettingsSignaturePosition = "below_quote"
-)
-
 // Defines values for SettingsUpdateComposeWindowMode.
 const (
 	SettingsUpdateComposeWindowModeInApp     SettingsUpdateComposeWindowMode = "in_app"
@@ -361,12 +337,6 @@ const (
 	Pull SettingsUpdateSentSyncMode = "pull"
 )
 
-// Defines values for SettingsUpdateSignaturePosition.
-const (
-	SettingsUpdateSignaturePositionAboveQuote SettingsUpdateSignaturePosition = "above_quote"
-	SettingsUpdateSignaturePositionBelowQuote SettingsUpdateSignaturePosition = "below_quote"
-)
-
 // Defines values for TaskStatus.
 const (
 	Cancelled TaskStatus = "cancelled"
@@ -403,13 +373,14 @@ type Account struct {
 	AuthType                 AccountAuthType         `json:"authType"`
 	AutoDetectSpecialFolders *bool                   `json:"autoDetectSpecialFolders,omitempty"`
 	CreatedAt                time.Time               `json:"createdAt"`
+	DefaultReplyTo           string                  `json:"defaultReplyTo"`
+	DefaultSendName          string                  `json:"defaultSendName"`
 	DownloadScope            AccountDownloadScope    `json:"downloadScope"`
 	Email                    string                  `json:"email"`
 	HasOAuth                 *bool                   `json:"hasOAuth,omitempty"`
 	HasPassword              *bool                   `json:"hasPassword,omitempty"`
 	HasSmtpPassword          *bool                   `json:"hasSmtpPassword,omitempty"`
 	Id                       openapi_types.UUID      `json:"id"`
-	Identities               *[]Identity             `json:"identities,omitempty"`
 	ImapAddr                 *string                 `json:"imapAddr,omitempty"`
 	ImapSecurity             *AccountImapSecurity    `json:"imapSecurity,omitempty"`
 	InitialSyncCutoffAt      *time.Time              `json:"initialSyncCutoffAt,omitempty"`
@@ -465,6 +436,8 @@ type AccountState string
 type AccountInput struct {
 	AuthType                 AccountInputAuthType          `json:"authType"`
 	AutoDetectSpecialFolders *bool                         `json:"autoDetectSpecialFolders,omitempty"`
+	DefaultReplyTo           *string                       `json:"defaultReplyTo,omitempty"`
+	DefaultSendName          *string                       `json:"defaultSendName,omitempty"`
 	DownloadScope            *AccountInputDownloadScope    `json:"downloadScope,omitempty"`
 	Email                    openapi_types.Email           `json:"email"`
 	ImapAddr                 *string                       `json:"imapAddr,omitempty"`
@@ -659,25 +632,24 @@ type DiscoveryResultSource string
 
 // Draft defines model for Draft.
 type Draft struct {
-	AccountId         openapi_types.UUID `json:"accountId"`
-	Attachments       *[]Attachment      `json:"attachments,omitempty"`
-	Bcc               *[]string          `json:"bcc,omitempty"`
-	BodyHtml          string             `json:"bodyHtml"`
-	BodyText          string             `json:"bodyText"`
-	Cc                *[]string          `json:"cc,omitempty"`
-	ContentHash       *string            `json:"contentHash,omitempty"`
-	Id                openapi_types.UUID `json:"id"`
-	IdentityAccountId openapi_types.UUID `json:"identityAccountId"`
-	IdentityEmail     string             `json:"identityEmail"`
-	InReplyTo         *string            `json:"inReplyTo,omitempty"`
-	LastError         *string            `json:"lastError,omitempty"`
-	Revision          int                `json:"revision"`
-	ScheduledAt       *time.Time         `json:"scheduledAt,omitempty"`
-	Status            DraftStatus        `json:"status"`
-	Subject           string             `json:"subject"`
-	SyncState         string             `json:"syncState"`
-	To                *[]string          `json:"to,omitempty"`
-	UpdatedAt         time.Time          `json:"updatedAt"`
+	AccountId   openapi_types.UUID `json:"accountId"`
+	Attachments *[]Attachment      `json:"attachments,omitempty"`
+	Bcc         *[]string          `json:"bcc,omitempty"`
+	BodyHtml    string             `json:"bodyHtml"`
+	BodyText    string             `json:"bodyText"`
+	Cc          *[]string          `json:"cc,omitempty"`
+	ContentHash *string            `json:"contentHash,omitempty"`
+	Id          openapi_types.UUID `json:"id"`
+	InReplyTo   *string            `json:"inReplyTo,omitempty"`
+	LastError   *string            `json:"lastError,omitempty"`
+	ReplyTo     *string            `json:"replyTo,omitempty"`
+	Revision    int                `json:"revision"`
+	ScheduledAt *time.Time         `json:"scheduledAt,omitempty"`
+	Status      DraftStatus        `json:"status"`
+	Subject     string             `json:"subject"`
+	SyncState   string             `json:"syncState"`
+	To          *[]string          `json:"to,omitempty"`
+	UpdatedAt   time.Time          `json:"updatedAt"`
 }
 
 // DraftStatus defines model for Draft.Status.
@@ -685,31 +657,31 @@ type DraftStatus string
 
 // DraftInput defines model for DraftInput.
 type DraftInput struct {
-	AttachmentIds     *[]openapi_types.UUID `json:"attachmentIds,omitempty"`
-	Bcc               *[]string             `json:"bcc,omitempty"`
-	BodyHtml          string                `json:"bodyHtml"`
-	BodyText          string                `json:"bodyText"`
-	Cc                *[]string             `json:"cc,omitempty"`
-	IdentityAccountId openapi_types.UUID    `json:"identityAccountId"`
-	IdentityEmail     string                `json:"identityEmail"`
-	InReplyTo         *string               `json:"inReplyTo,omitempty"`
-	Subject           string                `json:"subject"`
-	To                *[]string             `json:"to,omitempty"`
+	AccountId     openapi_types.UUID    `json:"accountId"`
+	AttachmentIds *[]openapi_types.UUID `json:"attachmentIds,omitempty"`
+	Bcc           *[]string             `json:"bcc,omitempty"`
+	BodyHtml      string                `json:"bodyHtml"`
+	BodyText      string                `json:"bodyText"`
+	Cc            *[]string             `json:"cc,omitempty"`
+	InReplyTo     *string               `json:"inReplyTo,omitempty"`
+	ReplyTo       *string               `json:"replyTo,omitempty"`
+	Subject       string                `json:"subject"`
+	To            *[]string             `json:"to,omitempty"`
 }
 
 // DraftUpdateRequest defines model for DraftUpdateRequest.
 type DraftUpdateRequest struct {
-	AttachmentIds     *[]openapi_types.UUID `json:"attachmentIds,omitempty"`
-	Bcc               *[]string             `json:"bcc,omitempty"`
-	BodyHtml          string                `json:"bodyHtml"`
-	BodyText          string                `json:"bodyText"`
-	Cc                *[]string             `json:"cc,omitempty"`
-	IdentityAccountId openapi_types.UUID    `json:"identityAccountId"`
-	IdentityEmail     string                `json:"identityEmail"`
-	InReplyTo         *string               `json:"inReplyTo,omitempty"`
-	Revision          int                   `json:"revision"`
-	Subject           string                `json:"subject"`
-	To                *[]string             `json:"to,omitempty"`
+	AccountId     openapi_types.UUID    `json:"accountId"`
+	AttachmentIds *[]openapi_types.UUID `json:"attachmentIds,omitempty"`
+	Bcc           *[]string             `json:"bcc,omitempty"`
+	BodyHtml      string                `json:"bodyHtml"`
+	BodyText      string                `json:"bodyText"`
+	Cc            *[]string             `json:"cc,omitempty"`
+	InReplyTo     *string               `json:"inReplyTo,omitempty"`
+	ReplyTo       *string               `json:"replyTo,omitempty"`
+	Revision      int                   `json:"revision"`
+	Subject       string                `json:"subject"`
+	To            *[]string             `json:"to,omitempty"`
 }
 
 // EmclientImportAccount defines model for EmclientImportAccount.
@@ -764,39 +736,6 @@ type ErrorResponse struct {
 		RequestId *string                 `json:"requestId,omitempty"`
 	} `json:"error"`
 }
-
-// Identity defines model for Identity.
-type Identity struct {
-	AccountId     openapi_types.UUID    `json:"accountId"`
-	Bcc           *[]string             `json:"bcc,omitempty"`
-	Email         string                `json:"email"`
-	IsDefault     bool                  `json:"isDefault"`
-	Name          string                `json:"name"`
-	Organization  *string               `json:"organization,omitempty"`
-	ReplyTo       *string               `json:"replyTo,omitempty"`
-	SignatureHtml *string               `json:"signatureHtml,omitempty"`
-	SignatureMode IdentitySignatureMode `json:"signatureMode"`
-	SignatureText *string               `json:"signatureText,omitempty"`
-}
-
-// IdentitySignatureMode defines model for Identity.SignatureMode.
-type IdentitySignatureMode string
-
-// IdentityInput defines model for IdentityInput.
-type IdentityInput struct {
-	Bcc           *[]string                  `json:"bcc,omitempty"`
-	Email         string                     `json:"email"`
-	IsDefault     *bool                      `json:"isDefault,omitempty"`
-	Name          string                     `json:"name"`
-	Organization  *string                    `json:"organization,omitempty"`
-	ReplyTo       *string                    `json:"replyTo,omitempty"`
-	SignatureHtml *string                    `json:"signatureHtml,omitempty"`
-	SignatureMode IdentityInputSignatureMode `json:"signatureMode"`
-	SignatureText *string                    `json:"signatureText,omitempty"`
-}
-
-// IdentityInputSignatureMode defines model for IdentityInput.SignatureMode.
-type IdentityInputSignatureMode string
 
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
@@ -938,17 +877,15 @@ type MoveMessageRequest struct {
 
 // OutboxItem defines model for OutboxItem.
 type OutboxItem struct {
-	AccountId         openapi_types.UUID `json:"accountId"`
-	Attempts          int                `json:"attempts"`
-	DraftId           openapi_types.UUID `json:"draftId"`
-	Id                openapi_types.UUID `json:"id"`
-	IdentityAccountId openapi_types.UUID `json:"identityAccountId"`
-	IdentityEmail     string             `json:"identityEmail"`
-	LastError         *string            `json:"lastError,omitempty"`
-	MessageIdHeader   *string            `json:"messageIdHeader,omitempty"`
-	ScheduledAt       *time.Time         `json:"scheduledAt,omitempty"`
-	SentAt            *time.Time         `json:"sentAt,omitempty"`
-	Status            OutboxItemStatus   `json:"status"`
+	AccountId       openapi_types.UUID `json:"accountId"`
+	Attempts        int                `json:"attempts"`
+	DraftId         openapi_types.UUID `json:"draftId"`
+	Id              openapi_types.UUID `json:"id"`
+	LastError       *string            `json:"lastError,omitempty"`
+	MessageIdHeader *string            `json:"messageIdHeader,omitempty"`
+	ScheduledAt     *time.Time         `json:"scheduledAt,omitempty"`
+	SentAt          *time.Time         `json:"sentAt,omitempty"`
+	Status          OutboxItemStatus   `json:"status"`
 }
 
 // OutboxItemStatus defines model for OutboxItem.Status.
@@ -977,10 +914,8 @@ type SecurityInfo struct {
 
 // SendRequest defines model for SendRequest.
 type SendRequest struct {
-	DraftId           openapi_types.UUID `json:"draftId"`
-	IdentityAccountId openapi_types.UUID `json:"identityAccountId"`
-	IdentityEmail     string             `json:"identityEmail"`
-	ScheduledAt       *time.Time         `json:"scheduledAt,omitempty"`
+	DraftId     openapi_types.UUID `json:"draftId"`
+	ScheduledAt *time.Time         `json:"scheduledAt,omitempty"`
 }
 
 // Settings defines model for Settings.
@@ -1016,7 +951,6 @@ type Settings struct {
 	SendRetryLimit                int                             `json:"sendRetryLimit"`
 	SentSyncMode                  SettingsSentSyncMode            `json:"sentSyncMode"`
 	SessionTtlHours               int                             `json:"sessionTtlHours"`
-	SignaturePosition             SettingsSignaturePosition       `json:"signaturePosition"`
 	SyncIntervalSeconds           int                             `json:"syncIntervalSeconds"`
 	Timezone                      string                          `json:"timezone"`
 }
@@ -1041,9 +975,6 @@ type SettingsLogLevel string
 
 // SettingsSentSyncMode defines model for Settings.SentSyncMode.
 type SettingsSentSyncMode string
-
-// SettingsSignaturePosition defines model for Settings.SignaturePosition.
-type SettingsSignaturePosition string
 
 // SettingsUpdate defines model for SettingsUpdate.
 type SettingsUpdate struct {
@@ -1077,7 +1008,6 @@ type SettingsUpdate struct {
 	SendRetryLimit                *int                                   `json:"sendRetryLimit,omitempty"`
 	SentSyncMode                  *SettingsUpdateSentSyncMode            `json:"sentSyncMode,omitempty"`
 	SessionTtlHours               *int                                   `json:"sessionTtlHours,omitempty"`
-	SignaturePosition             *SettingsUpdateSignaturePosition       `json:"signaturePosition,omitempty"`
 	SyncConcurrency               *int                                   `json:"syncConcurrency,omitempty"`
 	SyncIntervalSeconds           *int                                   `json:"syncIntervalSeconds,omitempty"`
 	Timezone                      *string                                `json:"timezone,omitempty"`
@@ -1103,9 +1033,6 @@ type SettingsUpdateLogLevel string
 
 // SettingsUpdateSentSyncMode defines model for SettingsUpdate.SentSyncMode.
 type SettingsUpdateSentSyncMode string
-
-// SettingsUpdateSignaturePosition defines model for SettingsUpdate.SignaturePosition.
-type SettingsUpdateSignaturePosition string
 
 // SetupRequest defines model for SetupRequest.
 type SetupRequest struct {
@@ -1171,9 +1098,6 @@ type AccountID = openapi_types.UUID
 
 // AttachmentID defines model for AttachmentID.
 type AttachmentID = openapi_types.UUID
-
-// IdentityEmail defines model for IdentityEmail.
-type IdentityEmail = string
 
 // MailboxID defines model for MailboxID.
 type MailboxID = openapi_types.UUID
@@ -1304,12 +1228,6 @@ type ApplyEmclientImportJSONRequestBody = EmclientImportRequest
 // UpdateAccountJSONRequestBody defines body for UpdateAccount for application/json ContentType.
 type UpdateAccountJSONRequestBody = AccountInput
 
-// CreateIdentityJSONRequestBody defines body for CreateIdentity for application/json ContentType.
-type CreateIdentityJSONRequestBody = IdentityInput
-
-// UpdateIdentityJSONRequestBody defines body for UpdateIdentity for application/json ContentType.
-type UpdateIdentityJSONRequestBody = IdentityInput
-
 // UploadAttachmentMultipartRequestBody defines body for UploadAttachment for multipart/form-data ContentType.
 type UploadAttachmentMultipartRequestBody UploadAttachmentMultipartBody
 
@@ -1375,21 +1293,6 @@ type ServerInterface interface {
 
 	// (PATCH /accounts/{id})
 	UpdateAccount(w http.ResponseWriter, r *http.Request, id AccountID)
-
-	// (GET /accounts/{id}/identities)
-	ListIdentities(w http.ResponseWriter, r *http.Request, id AccountID)
-
-	// (POST /accounts/{id}/identities)
-	CreateIdentity(w http.ResponseWriter, r *http.Request, id AccountID)
-
-	// (DELETE /accounts/{id}/identities/{email})
-	DeleteIdentity(w http.ResponseWriter, r *http.Request, id AccountID, email IdentityEmail)
-
-	// (PATCH /accounts/{id}/identities/{email})
-	UpdateIdentity(w http.ResponseWriter, r *http.Request, id AccountID, email IdentityEmail)
-
-	// (POST /accounts/{id}/identities/{email}/default)
-	SetDefaultIdentity(w http.ResponseWriter, r *http.Request, id AccountID, email IdentityEmail)
 
 	// (POST /accounts/{id}/reconcile)
 	ReconcileAccount(w http.ResponseWriter, r *http.Request, id AccountID)
@@ -1595,31 +1498,6 @@ func (_ Unimplemented) GetAccount(w http.ResponseWriter, r *http.Request, id Acc
 
 // (PATCH /accounts/{id})
 func (_ Unimplemented) UpdateAccount(w http.ResponseWriter, r *http.Request, id AccountID) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// (GET /accounts/{id}/identities)
-func (_ Unimplemented) ListIdentities(w http.ResponseWriter, r *http.Request, id AccountID) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// (POST /accounts/{id}/identities)
-func (_ Unimplemented) CreateIdentity(w http.ResponseWriter, r *http.Request, id AccountID) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// (DELETE /accounts/{id}/identities/{email})
-func (_ Unimplemented) DeleteIdentity(w http.ResponseWriter, r *http.Request, id AccountID, email IdentityEmail) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// (PATCH /accounts/{id}/identities/{email})
-func (_ Unimplemented) UpdateIdentity(w http.ResponseWriter, r *http.Request, id AccountID, email IdentityEmail) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// (POST /accounts/{id}/identities/{email}/default)
-func (_ Unimplemented) SetDefaultIdentity(w http.ResponseWriter, r *http.Request, id AccountID, email IdentityEmail) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2049,158 +1927,6 @@ func (siw *ServerInterfaceWrapper) UpdateAccount(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateAccount(w, r, id)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListIdentities operation middleware
-func (siw *ServerInterfaceWrapper) ListIdentities(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id AccountID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListIdentities(w, r, id)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CreateIdentity operation middleware
-func (siw *ServerInterfaceWrapper) CreateIdentity(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id AccountID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreateIdentity(w, r, id)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// DeleteIdentity operation middleware
-func (siw *ServerInterfaceWrapper) DeleteIdentity(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id AccountID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "email" -------------
-	var email IdentityEmail
-
-	err = runtime.BindStyledParameterWithOptions("simple", "email", chi.URLParam(r, "email"), &email, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "email", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DeleteIdentity(w, r, id, email)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// UpdateIdentity operation middleware
-func (siw *ServerInterfaceWrapper) UpdateIdentity(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id AccountID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "email" -------------
-	var email IdentityEmail
-
-	err = runtime.BindStyledParameterWithOptions("simple", "email", chi.URLParam(r, "email"), &email, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "email", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.UpdateIdentity(w, r, id, email)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// SetDefaultIdentity operation middleware
-func (siw *ServerInterfaceWrapper) SetDefaultIdentity(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id AccountID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "email" -------------
-	var email IdentityEmail
-
-	err = runtime.BindStyledParameterWithOptions("simple", "email", chi.URLParam(r, "email"), &email, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "email", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SetDefaultIdentity(w, r, id, email)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3758,21 +3484,6 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/accounts/{id}", wrapper.UpdateAccount)
-	})
-	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/accounts/{id}/identities", wrapper.ListIdentities)
-	})
-	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/accounts/{id}/identities", wrapper.CreateIdentity)
-	})
-	r.Group(func(r chi.Router) {
-		r.Delete(options.BaseURL+"/accounts/{id}/identities/{email}", wrapper.DeleteIdentity)
-	})
-	r.Group(func(r chi.Router) {
-		r.Patch(options.BaseURL+"/accounts/{id}/identities/{email}", wrapper.UpdateIdentity)
-	})
-	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/accounts/{id}/identities/{email}/default", wrapper.SetDefaultIdentity)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/accounts/{id}/reconcile", wrapper.ReconcileAccount)

@@ -21,7 +21,7 @@ func mapUser(u sqlcgen.User) oapi.User {
 	}
 }
 
-func mapAccount(a sqlcgen.Account, identities []sqlcgen.Identity) oapi.Account {
+func mapAccount(a sqlcgen.Account) oapi.Account {
 	state := "disconnected"
 	switch a.SyncState {
 	case "connected", "syncing", "error":
@@ -45,6 +45,7 @@ func mapAccount(a sqlcgen.Account, identities []sqlcgen.Identity) oapi.Account {
 		AutoDetectSpecialFolders: boolPtr(a.AutoDetectSpecialFolders),
 		SpecialFolders:           mapSpecialFolders(a.SpecialFolders),
 		State:                    oapi.AccountState(state), LastError: strPtr(a.LastError), CreatedAt: a.CreatedAt.UTC(),
+		DefaultSendName: a.DefaultSendName, DefaultReplyTo: a.DefaultReplyTo,
 	}
 	if a.OauthProvider != nil {
 		out.OauthProvider = a.OauthProvider
@@ -62,28 +63,7 @@ func mapAccount(a sqlcgen.Account, identities []sqlcgen.Identity) oapi.Account {
 		t := a.InitialSyncCutoffAt.UTC()
 		out.InitialSyncCutoffAt = &t
 	}
-	if identities != nil {
-		list := make([]oapi.Identity, 0, len(identities))
-		for _, id := range identities {
-			list = append(list, mapIdentity(id))
-		}
-		out.Identities = &list
-	}
 	return out
-}
-
-func mapIdentity(id sqlcgen.Identity) oapi.Identity {
-	mode := oapi.IdentitySignatureMode(id.SignatureMode)
-	bcc := id.Bcc
-	if bcc == nil {
-		bcc = []string{}
-	}
-	return oapi.Identity{
-		AccountId: openapi_types.UUID(id.AccountID), Email: id.Email, Name: id.Name,
-		Organization: strPtr(id.Organization), ReplyTo: strPtr(id.ReplyTo), Bcc: &bcc,
-		SignatureHtml: strPtr(id.SignatureHtml),
-		SignatureMode: mode, IsDefault: id.IsDefault,
-	}
 }
 
 func mapMailbox(m sqlcgen.Mailbox) oapi.Mailbox {
@@ -184,6 +164,7 @@ func mapDraft(d sqlcgen.Draft) oapi.Draft {
 		To      []string `json:"to"`
 		Cc      []string `json:"cc"`
 		Bcc     []string `json:"bcc"`
+		ReplyTo string   `json:"replyTo"`
 		Subject string   `json:"subject"`
 	}
 	_ = json.Unmarshal(d.Headers, &headers)
@@ -207,8 +188,8 @@ func mapDraft(d sqlcgen.Draft) oapi.Draft {
 	}
 	out := oapi.Draft{
 		Id: openapi_types.UUID(d.ID), AccountId: openapi_types.UUID(d.AccountID),
-		IdentityAccountId: openapi_types.UUID(d.IdentityAccountID), IdentityEmail: d.IdentityEmail,
-		InReplyTo: strPtr(d.InReplyTo), To: &headers.To, Cc: &headers.Cc, Bcc: &headers.Bcc,
+		InReplyTo: strPtr(d.InReplyTo), ReplyTo: strPtr(headers.ReplyTo),
+		To: &headers.To, Cc: &headers.Cc, Bcc: &headers.Bcc,
 		Subject: headers.Subject, BodyText: d.BodyText, BodyHtml: d.BodyHtml,
 		Revision: int(d.Revision), ContentHash: strPtr(d.ContentHash),
 		Status: oapi.DraftStatus(d.Status), SyncState: d.SyncState,
@@ -223,7 +204,6 @@ func mapDraft(d sqlcgen.Draft) oapi.Draft {
 func mapOutbox(o sqlcgen.Outbox) oapi.OutboxItem {
 	out := oapi.OutboxItem{
 		Id: openapi_types.UUID(o.ID), AccountId: openapi_types.UUID(o.AccountID),
-		IdentityAccountId: openapi_types.UUID(o.IdentityAccountID), IdentityEmail: o.IdentityEmail,
 		DraftId: openapi_types.UUID(o.DraftID), MessageIdHeader: strPtr(o.MessageIDHeader),
 		Status: oapi.OutboxItemStatus(o.Status), Attempts: int(o.Attempts), LastError: strPtr(o.LastError),
 	}

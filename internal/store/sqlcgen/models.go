@@ -46,6 +46,8 @@ type Account struct {
 	SmtpPasswordEnc          []byte          `json:"smtp_password_enc"`
 	AutoDetectSpecialFolders bool            `json:"auto_detect_special_folders"`
 	SpecialFolders           json.RawMessage `json:"special_folders"`
+	DefaultSendName          string          `json:"default_send_name"`
+	DefaultReplyTo           string          `json:"default_reply_to"`
 }
 
 type Attachment struct {
@@ -64,8 +66,6 @@ type Attachment struct {
 type Draft struct {
 	ID                uuid.UUID       `json:"id"`
 	AccountID         uuid.UUID       `json:"account_id"`
-	IdentityAccountID uuid.UUID       `json:"identity_account_id"`
-	IdentityEmail     string          `json:"identity_email"`
 	InReplyTo         string          `json:"in_reply_to"`
 	Headers           json.RawMessage `json:"headers"`
 	BodyText          string          `json:"body_text"`
@@ -83,21 +83,6 @@ type Draft struct {
 	LastError         string          `json:"last_error"`
 	CreatedAt         time.Time       `json:"created_at"`
 	UpdatedAt         time.Time       `json:"updated_at"`
-}
-
-type Identity struct {
-	AccountID     uuid.UUID `json:"account_id"`
-	Email         string    `json:"email"`
-	Name          string    `json:"name"`
-	Organization  string    `json:"organization"`
-	ReplyTo       string    `json:"reply_to"`
-	Bcc           []string  `json:"bcc"`
-	SignatureHtml string    `json:"signature_html"`
-	SignatureText string    `json:"signature_text"`
-	SignatureMode string    `json:"signature_mode"`
-	IsDefault     bool      `json:"is_default"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 type LocalArchive struct {
@@ -188,21 +173,19 @@ type OauthState struct {
 }
 
 type Outbox struct {
-	ID                uuid.UUID  `json:"id"`
-	AccountID         uuid.UUID  `json:"account_id"`
-	IdentityAccountID uuid.UUID  `json:"identity_account_id"`
-	IdentityEmail     string     `json:"identity_email"`
-	DraftID           uuid.UUID  `json:"draft_id"`
-	MessageIDHeader   string     `json:"message_id_header"`
-	Status            string     `json:"status"`
-	ScheduledAt       *time.Time `json:"scheduled_at"`
-	Attempts          int32      `json:"attempts"`
-	NextAttemptAt     time.Time  `json:"next_attempt_at"`
-	LeaseUntil        *time.Time `json:"lease_until"`
-	LastError         string     `json:"last_error"`
-	SentAt            *time.Time `json:"sent_at"`
-	CreatedAt         time.Time  `json:"created_at"`
-	UpdatedAt         time.Time  `json:"updated_at"`
+	ID              uuid.UUID  `json:"id"`
+	AccountID       uuid.UUID  `json:"account_id"`
+	DraftID         uuid.UUID  `json:"draft_id"`
+	MessageIDHeader string     `json:"message_id_header"`
+	Status          string     `json:"status"`
+	ScheduledAt     *time.Time `json:"scheduled_at"`
+	Attempts        int32      `json:"attempts"`
+	NextAttemptAt   time.Time  `json:"next_attempt_at"`
+	LeaseUntil      *time.Time `json:"lease_until"`
+	LastError       string     `json:"last_error"`
+	SentAt          *time.Time `json:"sent_at"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 type PendingOp struct {

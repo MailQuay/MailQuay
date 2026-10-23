@@ -79,12 +79,7 @@ func (s *Service) sendOne(ctx context.Context, outbox sqlcgen.Outbox) {
 		s.failPermanent(ctx, outbox, err)
 		return
 	}
-	ident, err := s.identities.Get(ctx, outbox.IdentityAccountID, outbox.IdentityEmail)
-	if err != nil {
-		s.failPermanent(ctx, outbox, err)
-		return
-	}
-	acct, err := s.accounts.Get(ctx, outbox.IdentityAccountID)
+	acct, err := s.accounts.Get(ctx, outbox.AccountID)
 	if err != nil {
 		s.failPermanent(ctx, outbox, err)
 		return
@@ -93,7 +88,7 @@ func (s *Service) sendOne(ctx context.Context, outbox sqlcgen.Outbox) {
 		s.failPermanent(ctx, outbox, errors.New("account has no SMTP server configured"))
 		return
 	}
-	raw, err := s.buildDraftMIME(ctx, acct, ident, draft, outbox.MessageIDHeader)
+	raw, err := s.buildDraftMIME(ctx, acct, draft, outbox.MessageIDHeader)
 	if err != nil {
 		s.failPermanent(ctx, outbox, err)
 		return
@@ -111,9 +106,6 @@ func (s *Service) sendOne(ctx context.Context, outbox sqlcgen.Outbox) {
 			recipients = append(recipients, addr.Address)
 		}
 	}
-	for _, addr := range ident.Bcc {
-		recipients = append(recipients, addr)
-	}
 	recipients = uniqueStrings(recipients)
 	if len(recipients) == 0 {
 		s.failPermanent(ctx, outbox, errors.New("no valid recipients"))
@@ -123,12 +115,12 @@ func (s *Service) sendOne(ctx context.Context, outbox sqlcgen.Outbox) {
 		Address: *acct.SmtpAddr, Security: acct.SmtpSecurity, Username: creds.SMTPUsername,
 		Password: creds.SMTPPassword, AccessToken: creds.AccessToken,
 		HELOHostname: acct.SmtpHeloHostname, Timeout: 60 * time.Second,
-	}, ident.Email, recipients, raw)
+	}, acct.Email, recipients, raw)
 	if err != nil {
 		s.handleSendError(ctx, outbox, acct, err)
 		return
 	}
-	if err := s.storeSentCopy(ctx, acct, ident, draft, raw); err != nil {
+	if err := s.storeSentCopy(ctx, acct, draft, raw); err != nil {
 		s.logger.Warn("store sent copy", "outbox", outbox.ID, "error", err)
 		_ = s.store.MarkOutboxCopyFailed(ctx, sqlcgen.MarkOutboxCopyFailedParams{ID: outbox.ID, LastError: err.Error()})
 		_ = s.store.SetDraftStatus(ctx, sqlcgen.SetDraftStatusParams{ID: draft.ID, Status: "copy_failed", LastError: err.Error()})
@@ -199,7 +191,7 @@ func (s *Service) reportTask(ctx context.Context, outbox sqlcgen.Outbox, status,
 	}
 }
 
-func (s *Service) buildDraftMIME(ctx context.Context, acct sqlcgen.Account, ident sqlcgen.Identity, draft sqlcgen.Draft, messageID string) ([]byte, error) {
+func (s *Service) buildDraftMIME(ctx context.Context, acct sqlcgen.Account, draft sqlcgen.Draft, messageID string) ([]byte, error) {
 	var headers draftHeaders
 	if err := json.Unmarshal(draft.Headers, &headers); err != nil {
 		return nil, fmt.Errorf("decode draft headers: %w", err)
@@ -216,13 +208,6 @@ func (s *Service) buildDraftMIME(ctx context.Context, acct sqlcgen.Account, iden
 	if err != nil {
 		return nil, err
 	}
-	var fixedBcc []mail.Address
-	for _, addr := range ident.Bcc {
-		if parsed, err := mail.ParseAddress(addr); err == nil {
-			fixedBcc = append(fixedBcc, *parsed)
-		}
-	}
-	bcc = append(bcc, fixedBcc...)
 	var atts []DraftAttachment
 	_ = json.Unmarshal(draft.Attachments, &atts)
 	blobs := make([]attachmentBlob, 0, len(atts))
@@ -237,17 +222,9 @@ func (s *Service) buildDraftMIME(ctx context.Context, acct sqlcgen.Account, iden
 		blobs = append(blobs, attachmentBlob{Filename: att.Filename, ContentType: att.ContentType, Data: data})
 	}
 	text, html := draft.BodyText, draft.BodyHtml
-	if signature := signatureFor(ident, draft); signature != "" {
-		switch {
-		case html != "":
-			html += "<br><br>" + signature
-		case text != "":
-			text += "\n\n" + plainSignature(ident)
-		}
-	}
 	return buildMIME(messageParts{
-		From: mail.Address{Name: ident.Name, Address: ident.Email}, To: to, Cc: cc, Bcc: bcc,
-		ReplyTo: ident.ReplyTo, Organization: ident.Organization, Subject: headers.Subject,
+		From: senderAddress(acct), To: to, Cc: cc, Bcc: bcc,
+		ReplyTo: headers.ReplyTo, Subject: headers.Subject,
 		MessageID: messageID, InReplyTo: draft.InReplyTo, References: headers.References,
 		Date: time.Now().UTC(), Text: text, HTML: html, Attachments: blobs,
 	})
@@ -274,7 +251,7 @@ func (s *Service) readAttachment(sha string) ([]byte, error) {
 	return data, nil
 }
 
-func (s *Service) storeSentCopy(ctx context.Context, acct sqlcgen.Account, ident sqlcgen.Identity, draft sqlcgen.Draft, raw []byte) error {
+func (s *Service) storeSentCopy(ctx context.Context, acct sqlcgen.Account, draft sqlcgen.Draft, raw []byte) error {
 	if acct.ReceiveProtocol == "imap" {
 		switch acct.SentCopyMode {
 		case "append":
@@ -284,7 +261,7 @@ func (s *Service) storeSentCopy(ctx context.Context, acct sqlcgen.Account, ident
 		}
 		return nil
 	}
-	return s.storeLocalSent(ctx, acct, ident, draft, raw)
+	return s.storeLocalSent(ctx, acct, draft, raw)
 }
 
 func (s *Service) appendToSent(ctx context.Context, acct sqlcgen.Account, draft sqlcgen.Draft, raw []byte) error {
@@ -304,7 +281,7 @@ func (s *Service) appendToSent(ctx context.Context, acct sqlcgen.Account, draft 
 	})
 }
 
-func (s *Service) storeLocalSent(ctx context.Context, acct sqlcgen.Account, ident sqlcgen.Identity, draft sqlcgen.Draft, raw []byte) error {
+func (s *Service) storeLocalSent(ctx context.Context, acct sqlcgen.Account, draft sqlcgen.Draft, raw []byte) error {
 	sent, err := s.store.GetMailboxByRole(ctx, sqlcgen.GetMailboxByRoleParams{AccountID: acct.ID, Role: "sent"})
 	if err != nil {
 		created, err := s.store.UpsertMailbox(ctx, sqlcgen.UpsertMailboxParams{
@@ -326,9 +303,10 @@ func (s *Service) storeLocalSent(ctx context.Context, acct sqlcgen.Account, iden
 	toJSON, _ := json.Marshal(headers.To)
 	ccJSON, _ := json.Marshal(headers.Cc)
 	bccJSON, _ := json.Marshal(headers.Bcc)
-	fromJSON, _ := json.Marshal(map[string]string{"name": ident.Name, "email": ident.Email})
+	sender := senderAddress(acct)
+	fromJSON, _ := json.Marshal(map[string]string{"name": sender.Name, "email": sender.Address})
 	received := time.Now().UTC()
-	headerID := makeMessageID(ident.Email)
+	headerID := makeMessageID(acct.Email)
 	dedupe := message.DedupeKey("", headerID, sha, sent.ID.String(), nil)
 	row, err := s.store.InsertMessage(ctx, sqlcgen.InsertMessageParams{
 		ID: uuid.MustParse(platform.NewID()), AccountID: acct.ID, MailboxID: sent.ID,
@@ -350,35 +328,6 @@ func (s *Service) storeLocalSent(ctx context.Context, acct sqlcgen.Account, iden
 	})
 	_ = s.store.UpdateMailboxCounts(ctx, sqlcgen.UpdateMailboxCountsParams{ID: sent.ID, Total: sent.Total + 1, Unread: sent.Unread})
 	return nil
-}
-
-func signatureFor(ident sqlcgen.Identity, draft sqlcgen.Draft) string {
-	kind := "new"
-	if draft.InReplyTo != "" {
-		kind = "reply"
-	}
-	switch ident.SignatureMode {
-	case "none":
-		return ""
-	case "new":
-		if kind != "new" {
-			return ""
-		}
-	case "reply":
-		if kind != "reply" {
-			return ""
-		}
-	case "forward":
-		return ""
-	}
-	return ident.SignatureHtml
-}
-
-func plainSignature(ident sqlcgen.Identity) string {
-	if ident.SignatureText != "" {
-		return ident.SignatureText
-	}
-	return ident.SignatureHtml
 }
 
 func isPermanentSMTPError(err error) bool {
@@ -438,4 +387,14 @@ func (s *Service) SendNow(ctx context.Context, outboxID uuid.UUID) error {
 	}
 	s.sendOne(ctx, outbox)
 	return nil
+}
+
+// senderAddress builds the From header for an account. The default send name
+// falls back to the account display name when it is not configured.
+func senderAddress(acct sqlcgen.Account) mail.Address {
+	name := strings.TrimSpace(acct.DefaultSendName)
+	if name == "" {
+		name = acct.Name
+	}
+	return mail.Address{Name: name, Address: acct.Email}
 }

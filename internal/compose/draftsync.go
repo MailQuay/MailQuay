@@ -37,16 +37,12 @@ func (s *Service) pushDraft(ctx context.Context, draft sqlcgen.Draft) error {
 	if draft.Status == "sent" || draft.SyncState == "conflict" {
 		return nil
 	}
-	acct, err := s.accounts.Get(ctx, draft.IdentityAccountID)
+	acct, err := s.accounts.Get(ctx, draft.AccountID)
 	if err != nil {
 		return err
 	}
 	if acct.ReceiveProtocol != "imap" || acct.ImapAddr == nil {
 		return nil
-	}
-	ident, err := s.identities.Get(ctx, draft.IdentityAccountID, draft.IdentityEmail)
-	if err != nil {
-		return err
 	}
 	creds, err := s.accounts.Credentials(ctx, acct)
 	if err != nil {
@@ -66,8 +62,8 @@ func (s *Service) pushDraft(ctx context.Context, draft sqlcgen.Draft) error {
 			return err
 		}
 	}
-	msgID := "<" + draft.ID.String() + "@" + messageDomain(ident.Email) + ">"
-	raw, err := s.buildDraftMIME(ctx, acct, ident, draft, msgID)
+	msgID := "<" + draft.ID.String() + "@" + messageDomain(acct.Email) + ">"
+	raw, err := s.buildDraftMIME(ctx, acct, draft, msgID)
 	if err != nil {
 		return err
 	}

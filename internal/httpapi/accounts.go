@@ -20,8 +20,7 @@ func (s *Server) ListAccounts(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]oapi.Account, 0, len(accounts))
 	for _, acct := range accounts {
-		ids, _ := s.ids.List(r.Context(), acct.ID)
-		out = append(out, mapAccount(acct, ids))
+		out = append(out, mapAccount(acct))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"accounts": out})
 }
@@ -46,8 +45,7 @@ func (s *Server) CreateAccount(w http.ResponseWriter, r *http.Request) {
 		s.error(w, r, http.StatusBadRequest, "account_invalid", err.Error())
 		return
 	}
-	ids, _ := s.ids.List(r.Context(), acct.ID)
-	writeJSON(w, http.StatusCreated, mapAccount(acct, ids))
+	writeJSON(w, http.StatusCreated, mapAccount(acct))
 }
 
 func (s *Server) GetAccount(w http.ResponseWriter, r *http.Request, id oapi.AccountID) {
@@ -64,8 +62,7 @@ func (s *Server) GetAccount(w http.ResponseWriter, r *http.Request, id oapi.Acco
 		s.internal(w, r, err)
 		return
 	}
-	ids, _ := s.ids.List(r.Context(), acct.ID)
-	writeJSON(w, http.StatusOK, mapAccount(acct, ids))
+	writeJSON(w, http.StatusOK, mapAccount(acct))
 }
 
 func (s *Server) UpdateAccount(w http.ResponseWriter, r *http.Request, id oapi.AccountID) {
@@ -88,8 +85,7 @@ func (s *Server) UpdateAccount(w http.ResponseWriter, r *http.Request, id oapi.A
 		s.error(w, r, http.StatusBadRequest, "account_invalid", err.Error())
 		return
 	}
-	ids, _ := s.ids.List(r.Context(), acct.ID)
-	writeJSON(w, http.StatusOK, mapAccount(acct, ids))
+	writeJSON(w, http.StatusOK, mapAccount(acct))
 }
 
 func (s *Server) DeleteAccount(w http.ResponseWriter, r *http.Request, id oapi.AccountID) {
@@ -231,6 +227,8 @@ func accountInput(body oapi.AccountInput) account.Input {
 		InitialSyncRange:   derefString((*string)(body.InitialSyncRange)),
 		DownloadScope:      derefString((*string)(body.DownloadScope)),
 		SentCopyMode:       derefString((*string)(body.SentCopyMode)),
+		DefaultSendName:    derefString(body.DefaultSendName),
+		DefaultReplyTo:     derefString(body.DefaultReplyTo),
 		POP3LeaveOnServer:  boolValue(body.Pop3LeaveOnServer, true),
 		POP3DeleteOnServer: boolValue(body.Pop3DeleteOnServer, false),
 	}

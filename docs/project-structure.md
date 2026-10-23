@@ -53,7 +53,6 @@ MailQuay/
 │   ├── auth/                        # 会话, Argon2id, CSRF, OAuth2 流程
 │   ├── account/                     # 邮箱账号, 地址解析, 凭据加密, 连接测试
 │   ├── emclient/                    # eM Client accounts.dat 解析与密码解密
-│   ├── identity/                    # 发件身份, 默认身份, 签名
 │   ├── mailbox/                     # 文件夹树, 角色映射, 计数
 │   ├── message/                     # 元数据, 标志, 移动, 删除, 线程
 │   ├── compose/                     # 草稿, 发信, outbox
@@ -97,14 +96,13 @@ MailQuay/
 | --- | --- | --- |
 | `internal/app` | 组装配置, 存储, 服务, HTTP 路由和后台 worker; 处理信号退出 | 所有内部包 |
 | `internal/config` | 读取环境变量, 设置默认值, 启动时校验 | `platform` |
-| `internal/httpapi` | 路由, 中间件, 参数校验, 错误到 HTTP 的映射 | `auth`, `account`, `emclient`, `identity`, `mailbox`, `message`, `compose`, `search`, `events`, `store` |
+| `internal/httpapi` | 路由, 中间件, 参数校验, 错误到 HTTP 的映射 | `auth`, `account`, `emclient`, `mailbox`, `message`, `compose`, `search`, `events`, `store` |
 | `internal/auth` | 密码哈希, 会话, CSRF, OAuth2 授权码流程 | `store`, `crypto`, `platform` |
 | `internal/account` | 邮箱账号, 地址解析, 凭据加密, 连接测试, 同步策略, 特殊文件夹配置, eM Client 导入会话 | `store`, `crypto`, `emclient`, `imapclient`, `pop3client`, `smtpclient`, `mailbox`, `platform` |
 | `internal/emclient` | 读取 eM Client 的 `accounts.dat`, 解密账号密码并输出与存储无关的账号结构 | 无内部依赖 |
-| `internal/identity` | 发件身份, 默认身份, 签名, 使用账号 SMTP | `store`, `account` |
 | `internal/mailbox` | 文件夹角色映射, 未读计数, 同步状态查询 | `store` |
 | `internal/message` | 元数据查询, 标志更新, 移动, 删除, 线程归并 | `store`, `events` |
-| `internal/compose` | 草稿版本, 身份解析, MIME 组装, outbox 状态机 | `store`, `identity`, `account`, `mime`, `smtpclient`, `imapclient`, `storage`, `events`, `netpace`, `mailsession` |
+| `internal/compose` | 草稿版本, MIME 组装, outbox 状态机 | `store`, `account`, `mime`, `smtpclient`, `imapclient`, `storage`, `events`, `netpace`, `mailsession` |
 | `internal/sync` | 账号调度, 初次与增量同步, 操作队列, 对账 | `imapclient`, `pop3client`, `mime`, `store`, `storage`, `events`, `search`, `netpace`, `mailsession` |
 | `internal/imapclient` | 连接管理, IDLE, FETCH, STORE, MOVE, APPEND | `crypto`, `platform` |
 | `internal/pop3client` | 连接管理, STAT, UIDL, TOP, RETR, DELE | `crypto`, `platform` |
@@ -186,7 +184,7 @@ frontend/
 │   │   ├── message-list/
 │   │   ├── message-view/
 │   │   ├── archive/                # 本地归档列表, 阅读, 附件
-│   │   ├── compose/                # 写邮件浮层, 身份选择, 草稿
+│   │   ├── compose/                # 写邮件浮层, 发件账号选择, 草稿
 │   │   ├── search/
 │   │   ├── tasks/                  # 任务中心, 进度聚合
 │   │   └── settings/
@@ -229,12 +227,11 @@ frontend/
 | `pages` | 页面级组件, 由路由挂载, 只做数据编排和布局组合 |
 | `features/auth` | 登录, 首次设置, 会话查询, 登出 |
 | `features/accounts` | 邮箱账号, 连接地址, 凭据, OAuth 跳转, 连接状态 |
-| `features/identities` | 发件身份, 默认身份, 签名 |
 | `features/mailboxes` | 固定入口, 其他分组, 未读徽标, 同步模式 |
 | `features/message-list` | 游标分页, 虚拟滚动, 多选, 批量操作, 快捷键 |
 | `features/message-view` | 头部信息, 正文 iframe, 附件, 回复和本地归档操作 |
 | `features/archive` | 本地归档列表, 归档阅读, 原始邮件和附件下载 |
-| `features/compose` | 写邮件浮层, 身份选择, 草稿编辑, 附件上传, 发送状态 |
+| `features/compose` | 写邮件浮层, 发件账号选择, 草稿编辑, 附件上传, 发送状态 |
 | `features/search` | 标题/全部模式, 账号/文件夹/收件人/发件人/附件组合筛选, 结果列表 |
 | `features/tasks` | 任务中心, 失败详情, 重试和忽略, 进度聚合 |
 | `features/settings` | 设置分组, 表单控件, 即时保存 |
@@ -357,7 +354,7 @@ frontend/
 
 | 分组 | 条目 |
 | --- | --- |
-| 账号 | 个人资料, 邮箱账号, 身份与签名, 安全 |
+| 账号 | 个人资料, 邮箱账号, 安全 |
 | 偏好 | 外观, 语言与时区, 快捷键 |
 | 邮件 | 同步与存储, 发送与草稿, 搜索, 性能与并发 |
 | 服务器 | 网络与访问, OAuth 应用, 日志 |
@@ -369,11 +366,10 @@ frontend/
 - 下拉, 开关和输入框右对齐; 说明文字在标题下方, 使用 `text-muted-foreground`.
 - 修改即时保存或显式保存, 同一分组内保持一致.
 - 设置搜索只过滤左侧条目, 不跨页面搜索邮件; 没有匹配项时显示空状态.
-- 身份与签名页面管理 `identities`: 显示名, 邮箱, 组织, Reply-To, 固定 Bcc, HTML/文本签名, 签名插入时机和默认身份; 发信使用账号 SMTP.
-- 签名插入时机为 `all`, `new`, `reply`, `forward`, `none`; 签名位置由全局设置控制, 回复时默认放在引用上方.
 - 同步与存储页面提供新账号的默认同步范围和下载范围; 已有账号在邮箱账号页面单独修改.
 - 同步与存储页面提供"删除账号时保留标记邮件"开关, 默认开启.
 - 同步与存储页面提供邮件列表行为开关: `remove_read_immediately` 默认关闭, `prepend_new_messages` 默认开启; 阅读窗格按选中邮件 ID 独立取正文, 列表过滤或实时更新不清空正文.
+- 邮箱账号编辑窗口包含显示名称, 默认发信名称和默认 Reply-To; 默认发信名称留空时使用显示名称, 默认 Reply-To 留空时使用发件人邮箱.
 - 邮箱账号页面的删除对话框说明异步清理范围和标记邮件保留规则.
 - 发送与草稿页面控制已发送拉取开关, 草稿同步模式 (`local`/`pull`/`mirror`), 拉取间隔, 推送延迟, 写邮件窗口形态 (`in_app`/`new_window`) 和自动重试次数.
 - 自动重试次数设置 `send_retry_limit` 默认 3, 范围 0-10; 永久错误不重试.
@@ -385,18 +381,18 @@ frontend/
 
 - 默认点击顶栏"写邮件"打开应用内浮层, 保留背后的邮件列表和阅读器.
 - 设置项 `compose_window_mode=in_app|new_window`, 默认 `in_app`; 改为 `new_window` 时用浏览器新窗口打开 `/compose`.
-- 新窗口模式复用同一草稿和身份数据, 关闭窗口前自动保存; `/compose` 从 `window.name` 读取 `mailquay-compose:<draftId>`, 跨窗口草稿同步和窗口聚焦使用 `BroadcastChannel`; 同一草稿已有窗口时聚焦已有窗口, 不使用路径参数或查询参数.
+- 新窗口模式复用同一草稿和账号数据, 关闭窗口前自动保存; `/compose` 从 `window.name` 读取 `mailquay-compose:<draftId>`, 跨窗口草稿同步和窗口聚焦使用 `BroadcastChannel`; 同一草稿已有窗口时聚焦已有窗口, 不使用路径参数或查询参数.
 - 浮层最小 `720x560`, 桌面端居中偏右, 移动端全屏.
-- 左上角是发送按钮和下拉箭头. 点击发送按当前身份立即发送; 下拉菜单提供身份选择和"定时发送".
+- 左上角是发送按钮和下拉箭头. 点击发送按当前发件账号立即发送; 下拉菜单提供定时发送.
 - 定时发送打开日期时间选择器, 按用户时区选择, 提交时转换为 UTC 写入 `scheduled_at`.
 - 定时发送的草稿在到期前保持 `scheduled`; 编辑草稿会取消定时并回到编辑状态.
-- 身份弹层宽度约 `320px`, 顶部搜索, 列表显示 `显示名 <邮箱>`, 按邮箱账号分组; 允许选择任何账号的身份.
-- 回复和转发默认选择原邮件所属邮箱账号的默认身份; 新建邮件默认使用当前选中账号的默认身份.
-- 原邮件所属账号已删除时, 回退到当前账号默认身份, 并提示这是本地保留副本.
-- 选择身份后更新 `From`, `Reply-To`, 固定 Bcc 和签名; 发送请求携带 `identityAccountId` 和 `identityEmail`.
+- 发件账号弹层每个邮箱账号只列一项, 显示 `默认发信名称 <邮箱>`; 允许选择任何账号.
+- 回复和转发默认选择原邮件所属邮箱账号; 新建邮件默认使用当前选中账号.
+- 原邮件所属账号已删除时, 回退到当前账号, 并提示这是本地保留副本.
+- `From` 使用账号邮箱和默认发信名称; Reply-To 在写邮件窗体中编辑, 默认使用账号的默认 Reply-To, 未配置时使用发件人邮箱; 发送请求携带 `accountId`.
 - 其余字段为收件人, 抄送, 密送, 主题, 正文, 附件和格式工具栏.
 - 关闭窗口自动保存草稿, 2 秒防抖自动保存; 浮层打开的草稿 ID 保存在 `sessionStorage`, 刷新后恢复, 不使用查询参数.
-- 发送成功后按身份所属账号的 `sent_copy_mode` 处理已发送副本.
+- 发送成功后按发件账号的 `sent_copy_mode` 处理已发送副本.
 
 ### 4.6 页面入口
 
@@ -418,7 +414,6 @@ frontend/
 | `/settings/general` | 外观, 语言, 时区 |
 | `/settings/account` | 个人资料和密码 |
 | `/settings/accounts` | 邮箱账号和连接 |
-| `/settings/identities` | 发件身份和签名 |
 | `/settings/mail` | 同步, 存储, 发送与草稿 |
 | `/settings/performance` | 资源检测和并发 |
 | `/settings/shortcuts` | 快捷键 |
@@ -444,7 +439,7 @@ frontend/
 | 主题, 语言 | 本地存储 + 设置接口 |
 | 任务列表, 进度, 失败 | TanStack Query + SSE, 服务端为准 |
 | 传输安全状态 | `/auth/me` 的 `security.insecureTransport`, 不写入本地存储 |
-| 写邮件窗口开关, 当前身份, 未保存输入 | Zustand + 草稿保存; 浮层草稿 ID 存 `sessionStorage` |
+| 写邮件窗口开关, 当前发件账号, 未保存输入 | Zustand + 草稿保存; 浮层草稿 ID 存 `sessionStorage` |
 | 设置导航和当前分组 | 页面路径 |
 | SSE 连接 | 单例, 挂在每个页面的根组件 |
 
@@ -458,26 +453,24 @@ frontend/
 | --- | --- | --- |
 | `users` | `id`, `username`, `display_name`, `password_hash`, `locale`, `theme` | 单行, 所有者账号; 登录只用用户名和密码 |
 | `sessions` | `id`, `user_id`, `token_hash`, `expires_at`, `user_agent`, `last_seen_at` | 会话摘要, 不存明文令牌 |
-| `accounts` | `id`, `name`, `email`, `provider`, `username`, `auth_type`, `password_enc`, `oauth_provider`, `oauth_scopes`, `oauth_refresh_enc`, `receive_protocol`, `imap_addr`, `imap_security`, `pop3_addr`, `pop3_security`, `smtp_addr`, `smtp_security`, `smtp_username`, `smtp_password_enc`, `smtp_helo_hostname`, `sync_enabled`, `initial_sync_range`, `download_scope`, `initial_sync_cutoff_at`, `sent_copy_mode`, `deleted_at` | 唯一 ID 化实体; 地址存 `host:port`; `smtp_addr` 可空; 删除时写 `deleted_at` |
-| `identities` | `account_id`, `email`, `name`, `organization`, `reply_to`, `bcc`, `signature_html`, `signature_text`, `signature_mode`, `is_default` | 发件身份属于账号, 主键为 `(account_id, email)`; 使用账号 SMTP 发信; `signature_mode` 为 `all`, `new`, `reply`, `forward`, `none` |
+| `accounts` | `id`, `name`, `email`, `provider`, `username`, `auth_type`, `password_enc`, `oauth_provider`, `oauth_scopes`, `oauth_refresh_enc`, `receive_protocol`, `imap_addr`, `imap_security`, `pop3_addr`, `pop3_security`, `smtp_addr`, `smtp_security`, `smtp_username`, `smtp_password_enc`, `smtp_helo_hostname`, `sync_enabled`, `initial_sync_range`, `download_scope`, `initial_sync_cutoff_at`, `sent_copy_mode`, `default_send_name`, `default_reply_to`, `deleted_at` | 唯一 ID 化实体; 地址存 `host:port`; `smtp_addr` 可空; 删除时写 `deleted_at` |
 | `mailboxes` | `id`, `account_id`, `path`, `name`, `delimiter`, `role`, `attributes`, `local_only`, `sync_mode`, `uidvalidity`, `uidnext`, `highestmodseq`, `total`, `unread`, `sync_state`, `last_synced_at`, `last_error` | IMAP 文件夹或 POP3 虚拟收件箱; `sync_mode` 为 `full`, `pull`, `off` |
 | `messages` | `id`, `account_id`, `mailbox_id`, `uid`, `pop3_uidl`, `modseq`, `message_id_header`, `provider_msg_id`, `dedupe_key`, `in_reply_to`, `references`, `thread_id`, `subject`, `from`, `to`, `cc`, `bcc`, `sent_at`, `received_at`, `size`, `flags`, `keywords`, `local_flag`, `preserved_at`, `snippet`, `has_attachments`, `raw_sha256`, `body_state`, `attachments_state` | `dedupe_key` 为账号内稳定去重键; `local_flag` 是本地标记; `preserved_at` 表示账号删除后保留的标记邮件 |
 | `attachments` | `id`, `message_id`, `part_path`, `filename`, `content_type`, `size`, `sha256`, `disposition`, `content_id` | 附件元数据与 blob 引用 |
 | `uploaded_attachments` | `id`, `filename`, `content_type`, `size`, `sha256` | 写邮件上传的附件, 发送时从 blob 读取 |
 | `local_archives` | `id`, `origin_account_id`, `origin_account_email`, `origin_mailbox_path`, `message_id_header`, `subject`, `from`, `to`, `cc`, `bcc`, `sent_at`, `received_at`, `size`, `raw_sha256`, `text_sha256`, `has_attachments`, `attachments`, `archived_at` | 独立本地归档; 不级联账号或文件夹, 保存完整原文和附件元数据 |
 | `threads` | `id`, `account_id`, `subject_norm`, `last_message_at`, `message_count` | 会话归并结果 |
-| `drafts` | `id`, `account_id`, `identity_account_id`, `identity_email`, `in_reply_to`, `headers`, `body_text`, `body_html`, `attachments`, `revision`, `content_hash`, `origin`, `remote_uid`, `remote_uidvalidity`, `sync_state`, `conflict_of`, `status`, `sent_message_id`, `last_error`, `updated_at` | `status` 为 `editing`, `sending`, `failed`, `copy_failed`, `sent`; `sent` 后只移出草稿列表, 不删除行 |
-| `outbox` | `id`, `account_id`, `identity_account_id`, `identity_email`, `draft_id`, `message_id_header`, `status`, `scheduled_at`, `attempts`, `next_attempt_at`, `lease_until`, `last_error`, `sent_at` | `scheduled`, `pending`, `sending`, `sent`, `failed`, `copy_failed`, `cancelled`; `scheduled_at` 为 UTC |
+| `drafts` | `id`, `account_id`, `in_reply_to`, `headers`, `body_text`, `body_html`, `attachments`, `revision`, `content_hash`, `origin`, `remote_uid`, `remote_uidvalidity`, `sync_state`, `conflict_of`, `status`, `sent_message_id`, `last_error`, `updated_at` | `status` 为 `editing`, `sending`, `failed`, `copy_failed`, `sent`; `sent` 后只移出草稿列表, 不删除行 |
+| `outbox` | `id`, `account_id`, `draft_id`, `message_id_header`, `status`, `scheduled_at`, `attempts`, `next_attempt_at`, `lease_until`, `last_error`, `sent_at` | `scheduled`, `pending`, `sending`, `sent`, `failed`, `copy_failed`, `cancelled`; `scheduled_at` 为 UTC |
 | `pending_ops` | `id`, `account_id`, `mailbox_id`, `message_id`, `uid`, `kind`, `payload`, `status`, `attempts`, `next_attempt_at`, `last_error` | IMAP 写操作队列, `kind` 为 `flags`, `move`, `delete`, `append`; POP3 只用 `pop3_delete` |
 | `search_jobs` | `id`, `message_id`, `op`, `status`, `attempts`, `next_attempt_at`, `lease_until`, `last_error`, `created_at` | Bleve 索引任务; `op` 为 `index` 或 `delete`, `status` 为 `pending`, `processing`, `done`, `failed` |
 | `tasks` | `id`, `type`, `account_id`, `status`, `done`, `total`, `unit`, `message`, `error`, `started_at`, `updated_at`, `completed_at`, `dismissed_at` | 用户可见后台任务; `type` 包含 `scope_reconcile`; `status` 为 `pending`, `running`, `completed`, `failed`, `cancelled` |
 | `oauth_states` | `state`, `provider`, `verifier_enc`, `redirect_after`, `expires_at` | 10 分钟过期, 用后删除 |
-| `settings` | `key`, `value` | 全局设置; 包括同步间隔, 下载范围, 发送, 草稿, 标记保留, 签名, 写邮件窗口, 重试次数, 会话有效期, 附件与预取上限, OAuth 客户端与加密密钥, 网络头像来源, 日志级别和并发参数 |
+| `settings` | `key`, `value` | 全局设置; 包括同步间隔, 下载范围, 发送, 草稿, 标记保留, 写邮件窗口, 重试次数, 会话有效期, 附件与预取上限, OAuth 客户端与加密密钥, 网络头像来源, 日志级别和并发参数 |
 
 ### 5.2 约束与索引
 
 - `accounts(email)` 在 `deleted_at IS NULL` 时唯一, 允许删除后重新添加同一邮箱.
-- `identities` 主键为 `(account_id, email)`; 每个账号最多一个 `is_default=true` 的身份.
 - `mailboxes(account_id, path)` 唯一; `messages(mailbox_id, uid)` 在 `uid` 非空时唯一, `messages(mailbox_id, pop3_uidl)` 在 `pop3_uidl` 非空时唯一.
 - `messages(account_id, received_at DESC, id DESC)` 支持统一收件箱游标分页.
 - `messages(thread_id, sent_at)` 支持会话视图.
@@ -524,23 +517,13 @@ frontend/
 | `GET` | `/auth/me` | 当前用户, 是否需要初始化, 以及 `security.insecureTransport` |
 | `POST` | `/auth/password` | 修改密码, 撤销其他会话 |
 
-### 6.2 发件身份
-
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| `GET` | `/accounts/{id}/identities` | 账号下的发件身份列表 |
-| `POST` | `/accounts/{id}/identities` | 创建身份, 使用账号 SMTP 发信 |
-| `PATCH` | `/accounts/{id}/identities/{email}` | 修改显示名, 组织, Reply-To, Bcc, 签名和签名时机 |
-| `DELETE` | `/accounts/{id}/identities/{email}` | 删除身份, 默认身份不可删除 |
-| `POST` | `/accounts/{id}/identities/{email}/default` | 设为账号默认身份 |
-
-### 6.3 账号与 OAuth
+### 6.2 账号与 OAuth
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | `GET` | `/accounts` | 账号列表与连接状态 |
 | `POST` | `/accounts` | 新建账号: 用户名, 密码或 OAuth, 收信协议, IMAP/POP3/SMTP 地址, 同步范围和下载范围 |
-| `GET` | `/accounts/{id}` | 账号详情, 含地址, 安全模式, 同步设置和身份 |
+| `GET` | `/accounts/{id}` | 账号详情, 含地址, 安全模式, 同步设置和发信默认值 |
 | `PATCH` | `/accounts/{id}` | 修改账号配置; 范围或下载范围变化时异步创建 `scope_reconcile` 任务 |
 | `POST` | `/accounts/{id}/reconcile` | 手动重新对账同步范围和下载范围 |
 | `DELETE` | `/accounts/{id}` | 软删除账号并异步清理; 默认保留标记邮件 |
@@ -549,7 +532,7 @@ frontend/
 | `GET` | `/oauth/{provider}/start` | 生成授权 URL 并重定向 |
 | `GET` | `/oauth/{provider}/callback` | 授权回调, 保存账号的 OAuth token |
 
-### 6.4 文件夹与邮件
+### 6.3 文件夹与邮件
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
@@ -573,20 +556,20 @@ frontend/
 | `GET` | `/archive/{id}/attachments/{attachmentId}` | 本地归档附件 |
 | `GET` | `/threads/{id}` | 会话内邮件列表 |
 
-### 6.5 草稿, 发件与搜索
+### 6.4 草稿, 发件与搜索
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | `GET` | `/drafts` | 草稿列表 |
-| `POST` | `/drafts` | 新建草稿, 可带 `identityAccountId` 和 `identityEmail` |
+| `POST` | `/drafts` | 新建草稿, 携带 `accountId` 和可选 `replyTo` |
 | `GET` | `/drafts/{id}` | 草稿详情 |
-| `PATCH` | `/drafts/{id}` | 保存草稿, 校验 `revision`, `identityAccountId` 和 `identityEmail` |
+| `PATCH` | `/drafts/{id}` | 保存草稿, 校验 `revision`, `accountId` 和可选 `replyTo` |
 | `DELETE` | `/drafts/{id}` | 删除草稿 |
 | `POST` | `/drafts/{id}/sync` | 手动推送或拉取单个草稿 |
 | `POST` | `/sync` | 触发所有开启同步的账号立即同步 |
 | `POST` | `/accounts/{id}/sync` | 触发单个账号立即同步 |
 | `POST` | `/mailboxes/{id}/sync` | 触发文件夹所属账号立即同步 |
-| `POST` | `/messages/send` | 提交发件, 携带身份和可选 `scheduledAt`; 草稿保留到发送成功 |
+| `POST` | `/messages/send` | 提交发件, 携带 `draftId` 和可选 `scheduledAt`; 草稿保留到发送成功 |
 | `GET` | `/outbox` | 发件队列, 定时任务和失败状态 |
 | `PATCH` | `/outbox/{id}` | 修改定时发送时间 |
 | `POST` | `/outbox/{id}/retry` | 重试失败记录, 继续使用原草稿 |
@@ -604,7 +587,7 @@ frontend/
 | `POST` | `/settings/concurrency/detect` | 重新检测 cgroup 限制并返回建议并发, 不改变手动值 |
 | `GET` | `/events` | SSE 事件流 |
 
-### 6.6 SSE
+### 6.5 SSE
 
 请求: `GET /api/v1/events`, `Accept: text/event-stream`, 可选 `Last-Event-ID`.
 

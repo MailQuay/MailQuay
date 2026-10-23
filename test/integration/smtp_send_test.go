@@ -24,7 +24,6 @@ import (
 	"github.com/mailquay/mailquay/internal/config"
 	"github.com/mailquay/mailquay/internal/crypto"
 	"github.com/mailquay/mailquay/internal/events"
-	"github.com/mailquay/mailquay/internal/identity"
 	"github.com/mailquay/mailquay/internal/mailbox"
 	"github.com/mailquay/mailquay/internal/mailsession"
 	"github.com/mailquay/mailquay/internal/message"
@@ -137,16 +136,16 @@ func TestOutboxSendsSMTPAndMarksDraft(t *testing.T) {
 	hub := events.NewHub()
 	settingsSvc := settings.NewService(st, platform.Resources{CPUs: 2, MemoryBytes: 4 << 30}, cipher, settings.Bootstrap{SyncInterval: time.Minute, POP3Interval: time.Minute, BodyPrefetchMax: 2 << 20, MaxAttachment: 25 << 20})
 	accounts := account.NewService(st, cipher, logger)
-	ids := identity.NewService(st)
 	_ = mailbox.NewService(st)
 	messages := message.NewService(st, hub, blobs, logger)
-	composer := compose.NewService(st, accounts, ids, settingsSvc, messages, blobs, hub, logger, nil, mailsession.NewPool(time.Minute))
+	composer := compose.NewService(st, accounts, settingsSvc, messages, blobs, hub, logger, nil, mailsession.NewPool(time.Minute))
 
 	acct, err := accounts.Create(ctx, account.Input{
 		Name: "Alice", Email: "alice@example.com", Username: "alice", AuthType: "password",
 		Password: "secret", ReceiveProtocol: "imap", IMAPAddr: "127.0.0.1:1", IMAPSecurity: "none",
 		SMTPAddr: ln.Addr().String(), SMTPSecurity: "none", SyncEnabled: true,
 		InitialSyncRange: "all", DownloadScope: "full_no_attachments", SentCopyMode: "none",
+		DefaultSendName: "Alice Sender", DefaultReplyTo: "replies@example.com",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -156,7 +155,7 @@ func TestOutboxSendsSMTPAndMarksDraft(t *testing.T) {
 		t.Fatal(err)
 	}
 	draft, err := composer.Create(ctx, compose.DraftInput{
-		IdentityAccountID: acct.ID, IdentityEmail: "alice@example.com",
+		AccountID: acct.ID, ReplyTo: "reply@example.com",
 		To: []string{"bob@example.com"}, Cc: []string{"carol@example.com"},
 		Subject: "Integration subject", BodyText: "hello from test", BodyHTML: "<p>hello from test</p>",
 		AttachmentIDs: []uuid.UUID{uploaded.ID},
@@ -164,7 +163,7 @@ func TestOutboxSendsSMTPAndMarksDraft(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := composer.Send(ctx, compose.SendInput{DraftID: draft.ID, IdentityAccountID: acct.ID, IdentityEmail: "alice@example.com"})
+	out, err := composer.Send(ctx, compose.SendInput{DraftID: draft.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +190,10 @@ func TestOutboxSendsSMTPAndMarksDraft(t *testing.T) {
 		t.Fatalf("captured %d messages", len(sink.raw))
 	}
 	raw := string(sink.raw[0])
-	for _, want := range []string{"Subject: Integration subject", "hello from test", "bob@example.com", "note.txt", "YXR0YWNobWVudCBwYXlsb2Fk"} {
+	for _, want := range []string{
+		"Subject: Integration subject", "hello from test", "bob@example.com", "note.txt",
+		"YXR0YWNobWVudCBwYXlsb2Fk", "\"Alice Sender\" <alice@example.com>", "Reply-To: reply@example.com",
+	} {
 		if !strings.Contains(raw, want) {
 			t.Errorf("raw message missing %q", want)
 		}

@@ -32,7 +32,7 @@ WHERE id IN (
     FOR UPDATE SKIP LOCKED
     LIMIT $2
 )
-RETURNING id, account_id, identity_account_id, identity_email, draft_id, message_id_header, status, scheduled_at, attempts, next_attempt_at, lease_until, last_error, sent_at, created_at, updated_at
+RETURNING id, account_id, draft_id, message_id_header, status, scheduled_at, attempts, next_attempt_at, lease_until, last_error, sent_at, created_at, updated_at
 `
 
 type ClaimDueOutboxParams struct {
@@ -52,8 +52,6 @@ func (q *Queries) ClaimDueOutbox(ctx context.Context, arg ClaimDueOutboxParams) 
 		if err := rows.Scan(
 			&i.ID,
 			&i.AccountID,
-			&i.IdentityAccountID,
-			&i.IdentityEmail,
 			&i.DraftID,
 			&i.MessageIDHeader,
 			&i.Status,
@@ -77,30 +75,26 @@ func (q *Queries) ClaimDueOutbox(ctx context.Context, arg ClaimDueOutboxParams) 
 }
 
 const createOutbox = `-- name: CreateOutbox :one
-INSERT INTO outbox (id, account_id, identity_account_id, identity_email, draft_id, message_id_header,
+INSERT INTO outbox (id, account_id, draft_id, message_id_header,
     status, scheduled_at, next_attempt_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING id, account_id, identity_account_id, identity_email, draft_id, message_id_header, status, scheduled_at, attempts, next_attempt_at, lease_until, last_error, sent_at, created_at, updated_at
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, account_id, draft_id, message_id_header, status, scheduled_at, attempts, next_attempt_at, lease_until, last_error, sent_at, created_at, updated_at
 `
 
 type CreateOutboxParams struct {
-	ID                uuid.UUID  `json:"id"`
-	AccountID         uuid.UUID  `json:"account_id"`
-	IdentityAccountID uuid.UUID  `json:"identity_account_id"`
-	IdentityEmail     string     `json:"identity_email"`
-	DraftID           uuid.UUID  `json:"draft_id"`
-	MessageIDHeader   string     `json:"message_id_header"`
-	Status            string     `json:"status"`
-	ScheduledAt       *time.Time `json:"scheduled_at"`
-	NextAttemptAt     time.Time  `json:"next_attempt_at"`
+	ID              uuid.UUID  `json:"id"`
+	AccountID       uuid.UUID  `json:"account_id"`
+	DraftID         uuid.UUID  `json:"draft_id"`
+	MessageIDHeader string     `json:"message_id_header"`
+	Status          string     `json:"status"`
+	ScheduledAt     *time.Time `json:"scheduled_at"`
+	NextAttemptAt   time.Time  `json:"next_attempt_at"`
 }
 
 func (q *Queries) CreateOutbox(ctx context.Context, arg CreateOutboxParams) (Outbox, error) {
 	row := q.db.QueryRow(ctx, createOutbox,
 		arg.ID,
 		arg.AccountID,
-		arg.IdentityAccountID,
-		arg.IdentityEmail,
 		arg.DraftID,
 		arg.MessageIDHeader,
 		arg.Status,
@@ -111,8 +105,6 @@ func (q *Queries) CreateOutbox(ctx context.Context, arg CreateOutboxParams) (Out
 	err := row.Scan(
 		&i.ID,
 		&i.AccountID,
-		&i.IdentityAccountID,
-		&i.IdentityEmail,
 		&i.DraftID,
 		&i.MessageIDHeader,
 		&i.Status,
@@ -138,7 +130,7 @@ func (q *Queries) DeleteOutboxByDraft(ctx context.Context, draftID uuid.UUID) er
 }
 
 const getOutbox = `-- name: GetOutbox :one
-SELECT id, account_id, identity_account_id, identity_email, draft_id, message_id_header, status, scheduled_at, attempts, next_attempt_at, lease_until, last_error, sent_at, created_at, updated_at FROM outbox WHERE id = $1
+SELECT id, account_id, draft_id, message_id_header, status, scheduled_at, attempts, next_attempt_at, lease_until, last_error, sent_at, created_at, updated_at FROM outbox WHERE id = $1
 `
 
 func (q *Queries) GetOutbox(ctx context.Context, id uuid.UUID) (Outbox, error) {
@@ -147,8 +139,6 @@ func (q *Queries) GetOutbox(ctx context.Context, id uuid.UUID) (Outbox, error) {
 	err := row.Scan(
 		&i.ID,
 		&i.AccountID,
-		&i.IdentityAccountID,
-		&i.IdentityEmail,
 		&i.DraftID,
 		&i.MessageIDHeader,
 		&i.Status,
@@ -165,7 +155,7 @@ func (q *Queries) GetOutbox(ctx context.Context, id uuid.UUID) (Outbox, error) {
 }
 
 const listOutbox = `-- name: ListOutbox :many
-SELECT id, account_id, identity_account_id, identity_email, draft_id, message_id_header, status, scheduled_at, attempts, next_attempt_at, lease_until, last_error, sent_at, created_at, updated_at FROM outbox WHERE status IN ('scheduled', 'pending', 'sending', 'failed', 'copy_failed')
+SELECT id, account_id, draft_id, message_id_header, status, scheduled_at, attempts, next_attempt_at, lease_until, last_error, sent_at, created_at, updated_at FROM outbox WHERE status IN ('scheduled', 'pending', 'sending', 'failed', 'copy_failed')
 ORDER BY COALESCE(scheduled_at, created_at), created_at
 `
 
@@ -181,8 +171,6 @@ func (q *Queries) ListOutbox(ctx context.Context) ([]Outbox, error) {
 		if err := rows.Scan(
 			&i.ID,
 			&i.AccountID,
-			&i.IdentityAccountID,
-			&i.IdentityEmail,
 			&i.DraftID,
 			&i.MessageIDHeader,
 			&i.Status,
@@ -256,7 +244,7 @@ func (q *Queries) RecoverStuckOutbox(ctx context.Context) error {
 const rescheduleOutbox = `-- name: RescheduleOutbox :one
 UPDATE outbox SET scheduled_at = $2, status = 'scheduled', next_attempt_at = $2, updated_at = now()
 WHERE id = $1 AND status IN ('scheduled', 'pending', 'failed')
-RETURNING id, account_id, identity_account_id, identity_email, draft_id, message_id_header, status, scheduled_at, attempts, next_attempt_at, lease_until, last_error, sent_at, created_at, updated_at
+RETURNING id, account_id, draft_id, message_id_header, status, scheduled_at, attempts, next_attempt_at, lease_until, last_error, sent_at, created_at, updated_at
 `
 
 type RescheduleOutboxParams struct {
@@ -270,8 +258,6 @@ func (q *Queries) RescheduleOutbox(ctx context.Context, arg RescheduleOutboxPara
 	err := row.Scan(
 		&i.ID,
 		&i.AccountID,
-		&i.IdentityAccountID,
-		&i.IdentityEmail,
 		&i.DraftID,
 		&i.MessageIDHeader,
 		&i.Status,

@@ -30,7 +30,6 @@ type Values struct {
 	DraftPushDelaySeconds    int    `json:"draftPushDelaySeconds"`
 	ComposeWindowMode        string `json:"composeWindowMode"`
 	SendRetryLimit           int    `json:"sendRetryLimit"`
-	SignaturePosition        string `json:"signaturePosition"`
 	NetworkAvatars           bool   `json:"networkAvatars"`
 	GravatarAvatars          bool   `json:"gravatarAvatars"`
 	BimiAvatars              bool   `json:"bimiAvatars"`
@@ -104,7 +103,6 @@ func Defaults() Values {
 		DraftPushDelaySeconds:    30,
 		ComposeWindowMode:        "in_app",
 		SendRetryLimit:           3,
-		SignaturePosition:        "above_quote",
 		NetworkAvatars:           true,
 		GravatarAvatars:          true,
 		BimiAvatars:              true,
@@ -443,8 +441,6 @@ func decodeInto(key string, raw json.RawMessage, v *Values) error {
 		return json.Unmarshal(raw, &v.ComposeWindowMode)
 	case "send_retry_limit":
 		return json.Unmarshal(raw, &v.SendRetryLimit)
-	case "signature_position":
-		return json.Unmarshal(raw, &v.SignaturePosition)
 	case "network_avatars":
 		return json.Unmarshal(raw, &v.NetworkAvatars)
 	case "gravatar_avatars":
@@ -513,8 +509,6 @@ func setField(key string, raw json.RawMessage, v *Values) error {
 		return json.Unmarshal(raw, &v.ComposeWindowMode)
 	case "send_retry_limit":
 		return json.Unmarshal(raw, &v.SendRetryLimit)
-	case "signature_position":
-		return json.Unmarshal(raw, &v.SignaturePosition)
 	case "network_avatars":
 		return json.Unmarshal(raw, &v.NetworkAvatars)
 	case "gravatar_avatars":
@@ -583,8 +577,6 @@ func fieldValue(key string, v Values) (any, error) {
 		return v.ComposeWindowMode, nil
 	case "send_retry_limit":
 		return v.SendRetryLimit, nil
-	case "signature_position":
-		return v.SignaturePosition, nil
 	case "network_avatars":
 		return v.NetworkAvatars, nil
 	case "gravatar_avatars":

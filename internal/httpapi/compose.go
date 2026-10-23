@@ -81,7 +81,7 @@ func (s *Server) UpdateDraft(w http.ResponseWriter, r *http.Request, id openapiU
 	}
 	base := oapi.DraftInput{
 		AttachmentIds: body.AttachmentIds, Bcc: body.Bcc, BodyHtml: body.BodyHtml, BodyText: body.BodyText,
-		Cc: body.Cc, IdentityAccountId: body.IdentityAccountId, IdentityEmail: body.IdentityEmail,
+		Cc: body.Cc, AccountId: body.AccountId, ReplyTo: body.ReplyTo,
 		InReplyTo: body.InReplyTo, Subject: body.Subject, To: body.To,
 	}
 	in, err := draftInput(base, &body.Revision)
@@ -144,14 +144,8 @@ func (s *Server) SendMessage(w http.ResponseWriter, r *http.Request) {
 		s.error(w, r, http.StatusBadRequest, "invalid_id", "Invalid draft id.")
 		return
 	}
-	identityAccountID, ok := toUUID(body.IdentityAccountId)
-	if !ok {
-		s.error(w, r, http.StatusBadRequest, "invalid_id", "Invalid identity account id.")
-		return
-	}
 	out, err := s.compose.Send(r.Context(), compose.SendInput{
-		DraftID: draftID, IdentityAccountID: identityAccountID, IdentityEmail: body.IdentityEmail,
-		ScheduledAt: body.ScheduledAt,
+		DraftID: draftID, ScheduledAt: body.ScheduledAt,
 	})
 	if err != nil {
 		s.error(w, r, http.StatusBadRequest, "send_failed", err.Error())
@@ -263,12 +257,12 @@ func (s *Server) CancelOutbox(w http.ResponseWriter, r *http.Request, id openapi
 }
 
 func draftInput(body oapi.DraftInput, revision *int) (compose.DraftInput, error) {
-	accountID, ok := toUUID(body.IdentityAccountId)
+	accountID, ok := toUUID(body.AccountId)
 	if !ok {
-		return compose.DraftInput{}, errors.New("invalid identityAccountId")
+		return compose.DraftInput{}, errors.New("invalid accountId")
 	}
 	in := compose.DraftInput{
-		IdentityAccountID: accountID, IdentityEmail: strings.ToLower(strings.TrimSpace(body.IdentityEmail)),
+		AccountID: accountID, ReplyTo: strings.TrimSpace(derefString(body.ReplyTo)),
 		InReplyTo: derefString(body.InReplyTo), Subject: body.Subject,
 		BodyText: body.BodyText, BodyHTML: body.BodyHtml,
 	}

@@ -14,18 +14,16 @@ import (
 )
 
 const createDraft = `-- name: CreateDraft :one
-INSERT INTO drafts (id, account_id, identity_account_id, identity_email, in_reply_to, headers,
+INSERT INTO drafts (id, account_id, in_reply_to, headers,
     body_text, body_html, attachments, revision, content_hash, origin, sync_state, status,
     remote_uid, remote_uidvalidity)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-RETURNING id, account_id, identity_account_id, identity_email, in_reply_to, headers, body_text, body_html, attachments, revision, content_hash, origin, remote_uid, remote_uidvalidity, sync_state, conflict_of, status, sent_message_id, last_error, created_at, updated_at
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+RETURNING id, account_id, in_reply_to, headers, body_text, body_html, attachments, revision, content_hash, origin, remote_uid, remote_uidvalidity, sync_state, conflict_of, status, sent_message_id, last_error, created_at, updated_at
 `
 
 type CreateDraftParams struct {
 	ID                uuid.UUID       `json:"id"`
 	AccountID         uuid.UUID       `json:"account_id"`
-	IdentityAccountID uuid.UUID       `json:"identity_account_id"`
-	IdentityEmail     string          `json:"identity_email"`
 	InReplyTo         string          `json:"in_reply_to"`
 	Headers           json.RawMessage `json:"headers"`
 	BodyText          string          `json:"body_text"`
@@ -44,8 +42,6 @@ func (q *Queries) CreateDraft(ctx context.Context, arg CreateDraftParams) (Draft
 	row := q.db.QueryRow(ctx, createDraft,
 		arg.ID,
 		arg.AccountID,
-		arg.IdentityAccountID,
-		arg.IdentityEmail,
 		arg.InReplyTo,
 		arg.Headers,
 		arg.BodyText,
@@ -63,8 +59,6 @@ func (q *Queries) CreateDraft(ctx context.Context, arg CreateDraftParams) (Draft
 	err := row.Scan(
 		&i.ID,
 		&i.AccountID,
-		&i.IdentityAccountID,
-		&i.IdentityEmail,
 		&i.InReplyTo,
 		&i.Headers,
 		&i.BodyText,
@@ -96,7 +90,7 @@ func (q *Queries) DeleteDraft(ctx context.Context, id uuid.UUID) error {
 }
 
 const getDraft = `-- name: GetDraft :one
-SELECT id, account_id, identity_account_id, identity_email, in_reply_to, headers, body_text, body_html, attachments, revision, content_hash, origin, remote_uid, remote_uidvalidity, sync_state, conflict_of, status, sent_message_id, last_error, created_at, updated_at FROM drafts WHERE id = $1
+SELECT id, account_id, in_reply_to, headers, body_text, body_html, attachments, revision, content_hash, origin, remote_uid, remote_uidvalidity, sync_state, conflict_of, status, sent_message_id, last_error, created_at, updated_at FROM drafts WHERE id = $1
 `
 
 func (q *Queries) GetDraft(ctx context.Context, id uuid.UUID) (Draft, error) {
@@ -105,8 +99,6 @@ func (q *Queries) GetDraft(ctx context.Context, id uuid.UUID) (Draft, error) {
 	err := row.Scan(
 		&i.ID,
 		&i.AccountID,
-		&i.IdentityAccountID,
-		&i.IdentityEmail,
 		&i.InReplyTo,
 		&i.Headers,
 		&i.BodyText,
@@ -129,7 +121,7 @@ func (q *Queries) GetDraft(ctx context.Context, id uuid.UUID) (Draft, error) {
 }
 
 const listDrafts = `-- name: ListDrafts :many
-SELECT id, account_id, identity_account_id, identity_email, in_reply_to, headers, body_text, body_html, attachments, revision, content_hash, origin, remote_uid, remote_uidvalidity, sync_state, conflict_of, status, sent_message_id, last_error, created_at, updated_at FROM drafts WHERE status <> 'sent'
+SELECT id, account_id, in_reply_to, headers, body_text, body_html, attachments, revision, content_hash, origin, remote_uid, remote_uidvalidity, sync_state, conflict_of, status, sent_message_id, last_error, created_at, updated_at FROM drafts WHERE status <> 'sent'
   AND ($1::uuid IS NULL OR account_id = $1::uuid)
 ORDER BY updated_at DESC, id DESC
 LIMIT $2
@@ -152,8 +144,6 @@ func (q *Queries) ListDrafts(ctx context.Context, arg ListDraftsParams) ([]Draft
 		if err := rows.Scan(
 			&i.ID,
 			&i.AccountID,
-			&i.IdentityAccountID,
-			&i.IdentityEmail,
 			&i.InReplyTo,
 			&i.Headers,
 			&i.BodyText,
@@ -183,7 +173,7 @@ func (q *Queries) ListDrafts(ctx context.Context, arg ListDraftsParams) ([]Draft
 }
 
 const listDraftsToPush = `-- name: ListDraftsToPush :many
-SELECT id, account_id, identity_account_id, identity_email, in_reply_to, headers, body_text, body_html, attachments, revision, content_hash, origin, remote_uid, remote_uidvalidity, sync_state, conflict_of, status, sent_message_id, last_error, created_at, updated_at FROM drafts WHERE sync_state = 'local' AND status = 'editing' AND updated_at < $1
+SELECT id, account_id, in_reply_to, headers, body_text, body_html, attachments, revision, content_hash, origin, remote_uid, remote_uidvalidity, sync_state, conflict_of, status, sent_message_id, last_error, created_at, updated_at FROM drafts WHERE sync_state = 'local' AND status = 'editing' AND updated_at < $1
 `
 
 func (q *Queries) ListDraftsToPush(ctx context.Context, updatedAt time.Time) ([]Draft, error) {
@@ -198,8 +188,6 @@ func (q *Queries) ListDraftsToPush(ctx context.Context, updatedAt time.Time) ([]
 		if err := rows.Scan(
 			&i.ID,
 			&i.AccountID,
-			&i.IdentityAccountID,
-			&i.IdentityEmail,
 			&i.InReplyTo,
 			&i.Headers,
 			&i.BodyText,
@@ -293,31 +281,27 @@ func (q *Queries) SetDraftSyncState(ctx context.Context, arg SetDraftSyncStatePa
 }
 
 const updateDraft = `-- name: UpdateDraft :one
-UPDATE drafts SET identity_account_id = $2, identity_email = $3, in_reply_to = $4,
-    headers = $5, body_text = $6, body_html = $7, attachments = $8,
-    revision = revision + 1, content_hash = $9, status = 'editing', sync_state = 'local', last_error = '', updated_at = now()
-WHERE id = $1 AND revision = $10
-RETURNING id, account_id, identity_account_id, identity_email, in_reply_to, headers, body_text, body_html, attachments, revision, content_hash, origin, remote_uid, remote_uidvalidity, sync_state, conflict_of, status, sent_message_id, last_error, created_at, updated_at
+UPDATE drafts SET in_reply_to = $2,
+    headers = $3, body_text = $4, body_html = $5, attachments = $6,
+    revision = revision + 1, content_hash = $7, status = 'editing', sync_state = 'local', last_error = '', updated_at = now()
+WHERE id = $1 AND revision = $8
+RETURNING id, account_id, in_reply_to, headers, body_text, body_html, attachments, revision, content_hash, origin, remote_uid, remote_uidvalidity, sync_state, conflict_of, status, sent_message_id, last_error, created_at, updated_at
 `
 
 type UpdateDraftParams struct {
-	ID                uuid.UUID       `json:"id"`
-	IdentityAccountID uuid.UUID       `json:"identity_account_id"`
-	IdentityEmail     string          `json:"identity_email"`
-	InReplyTo         string          `json:"in_reply_to"`
-	Headers           json.RawMessage `json:"headers"`
-	BodyText          string          `json:"body_text"`
-	BodyHtml          string          `json:"body_html"`
-	Attachments       json.RawMessage `json:"attachments"`
-	ContentHash       string          `json:"content_hash"`
-	Revision          int32           `json:"revision"`
+	ID          uuid.UUID       `json:"id"`
+	InReplyTo   string          `json:"in_reply_to"`
+	Headers     json.RawMessage `json:"headers"`
+	BodyText    string          `json:"body_text"`
+	BodyHtml    string          `json:"body_html"`
+	Attachments json.RawMessage `json:"attachments"`
+	ContentHash string          `json:"content_hash"`
+	Revision    int32           `json:"revision"`
 }
 
 func (q *Queries) UpdateDraft(ctx context.Context, arg UpdateDraftParams) (Draft, error) {
 	row := q.db.QueryRow(ctx, updateDraft,
 		arg.ID,
-		arg.IdentityAccountID,
-		arg.IdentityEmail,
 		arg.InReplyTo,
 		arg.Headers,
 		arg.BodyText,
@@ -330,8 +314,6 @@ func (q *Queries) UpdateDraft(ctx context.Context, arg UpdateDraftParams) (Draft
 	err := row.Scan(
 		&i.ID,
 		&i.AccountID,
-		&i.IdentityAccountID,
-		&i.IdentityEmail,
 		&i.InReplyTo,
 		&i.Headers,
 		&i.BodyText,

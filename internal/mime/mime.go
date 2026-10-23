@@ -39,6 +39,7 @@ type Attachment struct {
 type Parsed struct {
 	MessageID      string
 	InReplyTo      string
+	ReplyTo        string
 	References     []string
 	Subject        string
 	From           Address
@@ -109,6 +110,10 @@ func readHeaders(header message.Header, parsed *Parsed) {
 		parsed.References = list
 	} else {
 		parsed.References = msgIDList(header.Get("References"))
+	}
+
+	if replyTo := strings.TrimSpace(header.Get("Reply-To")); replyTo != "" {
+		parsed.ReplyTo = replyTo
 	}
 
 	if subject, err := h.Subject(); err == nil {

@@ -20,7 +20,6 @@ func (s *Server) GetMailboxTree(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 	for _, group := range tree.Accounts {
-		ids, _ := s.ids.List(r.Context(), group.Account.ID)
 		folders := make([]oapi.Mailbox, 0, len(group.Folders))
 		for _, mb := range group.Folders {
 			folders = append(folders, mapMailbox(mb))
@@ -30,7 +29,7 @@ func (s *Server) GetMailboxTree(w http.ResponseWriter, r *http.Request) {
 			other = append(other, mapMailbox(mb))
 		}
 		out.Accounts = append(out.Accounts, oapi.AccountMailboxes{
-			Account: mapAccount(group.Account, ids), Folders: folders, Other: other,
+			Account: mapAccount(group.Account), Folders: folders, Other: other,
 		})
 	}
 	writeJSON(w, http.StatusOK, out)

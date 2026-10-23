@@ -3,13 +3,11 @@ package sync
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 
 	"github.com/mailquay/mailquay/internal/imapclient"
 	"github.com/mailquay/mailquay/internal/mime"
@@ -47,14 +45,6 @@ func (s *Service) pullDrafts(ctx context.Context, client *imapclient.Client, acc
 			known[*draft.RemoteUid] = struct{}{}
 		}
 	}
-	identity, err := s.store.GetDefaultIdentity(ctx, acct.ID)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return err
-	}
-	if identity.Email == "" {
-		identity.Email = acct.Email
-		identity.Name = acct.Name
-	}
 	for _, uid := range uids {
 		if _, ok := known[int64(uid)]; ok {
 			continue
@@ -71,6 +61,9 @@ func (s *Service) pullDrafts(ctx context.Context, client *imapclient.Client, acc
 		headers := map[string]any{
 			"to": addressStrings(parsed.To), "cc": addressStrings(parsed.Cc),
 			"bcc": addressStrings(parsed.Bcc), "subject": parsed.Subject,
+		}
+		if parsed.ReplyTo != "" {
+			headers["replyTo"] = parsed.ReplyTo
 		}
 		if len(parsed.References) > 0 {
 			headers["references"] = parsed.References
@@ -102,7 +95,6 @@ func (s *Service) pullDrafts(ctx context.Context, client *imapclient.Client, acc
 		uidValidity := int64(selected.UIDValidity)
 		_, err = s.store.CreateDraft(ctx, sqlcgen.CreateDraftParams{
 			ID: uuid.MustParse(platform.NewID()), AccountID: acct.ID,
-			IdentityAccountID: acct.ID, IdentityEmail: identity.Email,
 			InReplyTo: parsed.InReplyTo, Headers: headerRaw, BodyText: parsed.Text, BodyHtml: parsed.HTML,
 			Attachments: attRaw, Revision: 1, ContentHash: "", Origin: "pull",
 			RemoteUid: &remoteUID, RemoteUidvalidity: &uidValidity,

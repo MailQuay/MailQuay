@@ -1,7 +1,7 @@
 -- name: CreateOutbox :one
-INSERT INTO outbox (id, account_id, identity_account_id, identity_email, draft_id, message_id_header,
+INSERT INTO outbox (id, account_id, draft_id, message_id_header,
     status, scheduled_at, next_attempt_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: GetOutbox :one

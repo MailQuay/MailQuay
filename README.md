@@ -27,7 +27,7 @@ MailQuay is not a mail server. It does not run an MTA, does not own a domain, an
 - Runtime settings (sync intervals, limits, OAuth apps, log level) stored in PostgreSQL and edited in the web UI; public URL, CORS, trusted proxies and insecure-host exemptions come from environment variables.
 - Conservative sync and fetch concurrency with user overrides; search and index pools default to conservative CPU-based sizing with a switch to set them by hand.
 - Compose, reply, forward, drafts, attachments, scheduled send, and a retrying outbox with a configurable retry limit.
-- Multiple sender identities per mailbox account, each with its own signature and reply settings.
+- Every account sends from its own address; set a default sender name and Reply-To per account, and edit Reply-To per message.
 - Local marked mail keeps full bodies and attachments and survives account removal by default.
 - Local archive stores an independent full copy that survives remote deletion and account removal.
 - Delete moves mail to Trash and leaves cleanup to the provider.

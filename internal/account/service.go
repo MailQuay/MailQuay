@@ -50,6 +50,8 @@ type Input struct {
 	InitialSyncRange   string
 	DownloadScope      string
 	SentCopyMode       string
+	DefaultSendName    string
+	DefaultReplyTo     string
 	POP3LeaveOnServer  bool
 	POP3DeleteOnServer bool
 	// AutoDetectSpecialFolders is nil when the caller did not send it.
@@ -154,6 +156,8 @@ func (s *Service) Create(ctx context.Context, in Input) (sqlcgen.Account, error)
 		Pop3DeleteOnServer:       normalized.POP3DeleteOnServer,
 		AutoDetectSpecialFolders: autoDetect,
 		SpecialFolders:           mailbox.EncodeSpecialFolders(normalized.SpecialFolders),
+		DefaultSendName:          normalized.DefaultSendName,
+		DefaultReplyTo:           normalized.DefaultReplyTo,
 	}
 	if in.AuthType == "password" {
 		enc, err := s.cipher.EncryptString(in.Password, passwordAAD(id))
@@ -179,15 +183,6 @@ func (s *Service) Create(ctx context.Context, in Input) (sqlcgen.Account, error)
 	acct, err := s.store.CreateAccount(ctx, params)
 	if err != nil {
 		return sqlcgen.Account{}, fmt.Errorf("create account: %w", err)
-	}
-	if _, err := s.store.CreateIdentity(ctx, sqlcgen.CreateIdentityParams{
-		AccountID:     id,
-		Email:         normalized.Email,
-		Name:          firstNonEmpty(in.Name, normalized.Email),
-		SignatureMode: "all",
-		IsDefault:     true,
-	}); err != nil {
-		return sqlcgen.Account{}, fmt.Errorf("create default identity: %w", err)
 	}
 	if s.OnCreated != nil {
 		s.OnCreated(ctx, id)
@@ -233,6 +228,8 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, in Input) (sqlcgen.A
 		Pop3DeleteOnServer:       normalized.POP3DeleteOnServer,
 		AutoDetectSpecialFolders: existing.AutoDetectSpecialFolders,
 		SpecialFolders:           existing.SpecialFolders,
+		DefaultSendName:          normalized.DefaultSendName,
+		DefaultReplyTo:           normalized.DefaultReplyTo,
 	}
 	if normalized.AutoDetectSpecialFolders != nil {
 		params.AutoDetectSpecialFolders = *normalized.AutoDetectSpecialFolders
@@ -414,6 +411,13 @@ func (s *Service) normalize(in Input, creating bool) (Input, error) {
 	in.DownloadScope = defaultString(in.DownloadScope, "full_no_attachments")
 	in.SentCopyMode = defaultString(in.SentCopyMode, "auto")
 	in.Provider = defaultString(in.Provider, "custom")
+	in.DefaultSendName = strings.TrimSpace(in.DefaultSendName)
+	in.DefaultReplyTo = strings.TrimSpace(in.DefaultReplyTo)
+	if in.DefaultReplyTo != "" {
+		if _, err := mail.ParseAddressList(in.DefaultReplyTo); err != nil {
+			return in, errors.New("defaultReplyTo must be a valid address")
+		}
+	}
 	if in.Email == "" {
 		return in, errors.New("email is required")
 	}
@@ -551,17 +555,6 @@ func defaultString(v, fallback string) string {
 	}
 	return v
 }
-
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if strings.TrimSpace(v) != "" {
-			return v
-		}
-	}
-	return ""
-}
-
-var _ = mail.ParseAddress
 
 // normalizeSpecialFolders trims manual folder paths, drops empty entries and
 // rejects unknown roles or two roles pointing at the same folder.

@@ -19,7 +19,6 @@ import (
 	"github.com/mailquay/mailquay/internal/crypto"
 	"github.com/mailquay/mailquay/internal/events"
 	"github.com/mailquay/mailquay/internal/httpapi/oapi"
-	"github.com/mailquay/mailquay/internal/identity"
 	"github.com/mailquay/mailquay/internal/mailbox"
 	"github.com/mailquay/mailquay/internal/message"
 	"github.com/mailquay/mailquay/internal/search"
@@ -36,7 +35,6 @@ type Server struct {
 	cfg            *config.Config
 	auth           *auth.Service
 	accounts       *account.Service
-	ids            *identity.Service
 	mailboxes      *mailbox.Service
 	messages       *message.Service
 	compose        *compose.Service
@@ -53,11 +51,11 @@ type Server struct {
 
 // NewServer builds the HTTP server.
 func NewServer(st *store.Store, cfg *config.Config, authSvc *auth.Service, accounts *account.Service,
-	ids *identity.Service, mailboxes *mailbox.Service, messages *message.Service, composeSvc *compose.Service,
+	mailboxes *mailbox.Service, messages *message.Service, composeSvc *compose.Service,
 	settingsSvc *settings.Service, syncSvc *syncservice.Service, index *search.Index, hub *events.Hub,
 	blobs *storage.Store, logger *slog.Logger, cipher *crypto.Cipher) *Server {
 	return &Server{
-		store: st, cfg: cfg, auth: authSvc, accounts: accounts, ids: ids, mailboxes: mailboxes,
+		store: st, cfg: cfg, auth: authSvc, accounts: accounts, mailboxes: mailboxes,
 		messages: messages, compose: composeSvc, settings: settingsSvc, avatarSettings: settingsSvc, sync: syncSvc,
 		index: index, hub: hub, blobs: blobs, logger: logger, cipher: cipher,
 		oauth: NewOAuth(cfg, settingsSvc, st, accounts, cipher),
@@ -138,8 +136,7 @@ func boolValue(v *bool, fallback bool) bool {
 func mapAccountError(err error, w http.ResponseWriter, r *http.Request, s *Server) bool {
 	switch {
 	case errors.Is(err, account.ErrNotFound), errors.Is(err, message.ErrNotFound),
-		errors.Is(err, mailbox.ErrNotFound), errors.Is(err, identity.ErrNotFound),
-		errors.Is(err, compose.ErrNotFound):
+		errors.Is(err, mailbox.ErrNotFound), errors.Is(err, compose.ErrNotFound):
 		s.error(w, r, http.StatusNotFound, "not_found", "The requested resource does not exist.")
 		return true
 	case errors.Is(err, auth.ErrUnauthorized):

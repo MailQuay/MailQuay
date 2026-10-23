@@ -182,6 +182,22 @@ func TestHTTPAuthAndAccountFlow(t *testing.T) {
 	if _, ok := account["password"]; ok {
 		t.Fatal("password leaked in response")
 	}
+	resp = sendJSON(t, client, http.MethodPatch, base+"/accounts/"+account["id"].(string), map[string]any{
+		"name": "Test", "email": "api@example.com", "username": "api", "authType": "password",
+		"receiveProtocol": "imap", "imapAddr": "127.0.0.1:143", "imapSecurity": "starttls",
+		"smtpAddr": "127.0.0.1:25", "smtpSecurity": "none", "syncEnabled": true,
+		"initialSyncRange": "all", "downloadScope": "full_no_attachments",
+		"defaultSendName": "API Sender", "defaultReplyTo": "replies@example.com",
+	}, csrf)
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("update account %d: %s", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+	account = getJSON(t, client, base+"/accounts/"+account["id"].(string))
+	if account["defaultSendName"] != "API Sender" || account["defaultReplyTo"] != "replies@example.com" {
+		t.Fatalf("sender defaults not persisted: %+v", account)
+	}
 	tree := getJSON(t, client, base+"/mailboxes")
 	if _, ok := tree["accounts"].([]any); !ok {
 		t.Fatalf("tree = %+v", tree)
