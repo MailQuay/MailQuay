@@ -30,8 +30,8 @@ const envelopeBatchInterval = 200 * time.Millisecond
 
 // errConnectionLost marks a pass that stopped because the shared IMAP
 // connection died, not because a mailbox is broken. syncAccount retries once
-// with a fresh connection; mailbox-level state is only recorded on the last
-// attempt.
+// with a fresh connection; when the retry loses the connection too, the pass
+// records the mailbox failure and ends without an account-level error.
 var errConnectionLost = errors.New("imap connection lost")
 
 // envelopeBatchSize returns the configured per-FETCH envelope count.
@@ -63,7 +63,8 @@ func (s *Service) imapConfig(acct sqlcgen.Account, creds account.Credentials) im
 // still allowed, so the mailbox that hit the failure is not marked failed only
 // to have the retry clear it. Mailboxes that were never attempted keep their
 // state as well. The returned error wraps errConnectionLost so the caller can
-// redial and rerun the pass.
+// redial and rerun the pass; on the last attempt the failing mailbox is marked
+// instead and the pass ends without an account-level error.
 func (s *Service) syncIMAP(ctx context.Context, client *imapclient.Client, acct sqlcgen.Account, retryable bool) error {
 	folders, err := client.List(ctx)
 	if err != nil {
@@ -93,7 +94,11 @@ func (s *Service) syncIMAP(ctx context.Context, client *imapclient.Client, acct 
 		if err := s.syncIMAPMailbox(ctx, client, acct, mb); err != nil {
 			if client.Closed() {
 				if !retryable {
+					// The retry lost the connection as well. Record the failure
+					// on the mailbox that hit it and stop this pass; the account
+					// stays usable and untouched mailboxes keep their state.
 					s.markMailboxError(ctx, acct, mb, err)
+					return nil
 				}
 				return fmt.Errorf("%w: %v", errConnectionLost, err)
 			}
